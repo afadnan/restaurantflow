@@ -1,0 +1,394 @@
+# ============================================================
+# RestaurantFlow.fun - Root .gitignore
+# Flutter + Dart + Go + PostgreSQL + Docker + IDE
+# ============================================================
+
+
+# ============================================================
+# OS / System
+# ============================================================
+
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+Desktop.ini
+
+
+# ============================================================
+# IDE / Editors
+# ============================================================
+
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# VS Code workspace files
+*.code-workspace
+
+# JetBrains
+.idea/**/workspace.xml
+.idea/**/tasks.xml
+.idea/**/usage.statistics.xml
+.idea/**/dictionaries/
+.idea/**/shelf/
+
+
+# ============================================================
+# Flutter / Dart
+# ============================================================
+
+# Flutter generated files
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+
+# Pub cache / generated metadata
+.pub-cache/
+.pub/
+*.lock
+
+# IMPORTANT:
+# Keep pubspec.lock for applications.
+# Ignore it only for reusable Dart packages if desired.
+#
+# If using a monorepo, we will normally keep application
+# lockfiles but may ignore package lockfiles depending on
+# the workspace strategy.
+
+# Flutter build output
+build/
+
+# Flutter generated coverage
+coverage/
+
+# Dart generated files
+*.g.dart
+*.freezed.dart
+
+# Generated Flutter platform files
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Flutter web generated files
+web/flutter.js
+web/flutter_service_worker.js
+web/assets/FontManifest.json
+web/assets/AssetManifest.json
+web/assets/AssetManifest.bin.json
+web/assets/NOTICES
+
+
+# ============================================================
+# Android
+# ============================================================
+
+**/android/.gradle/
+**/android/local.properties
+**/android/gradle-app.setting
+**/android/captures/
+**/android/.cxx/
+**/android/build/
+**/android/app/build/
+**/android/app/.cxx/
+**/android/key.properties
+
+# Android Studio
+**/android/.idea/
+
+# APK / AAB
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Signing
+*.jks
+*.keystore
+
+
+# ============================================================
+# iOS / Xcode
+# ============================================================
+
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Flutter/ephemeral/
+**/ios/Flutter/.last_build_id
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/flutter_export_environment.sh
+
+# Xcode
+**/ios/*.xcworkspace/xcuserdata/
+**/ios/*.xcodeproj/xcuserdata/
+**/ios/*.xcodeproj/project.xcworkspace/xcuserdata/
+
+# Xcode user files
+**/ios/**/*.mode1v3
+**/ios/**/*.mode2v3
+**/ios/**/*.perspectivev3
+**/ios/**/*.pbxuser
+
+# iOS build
+**/ios/build/
+
+# Fastlane
+**/ios/fastlane/report.xml
+**/ios/fastlane/Preview.html
+**/ios/fastlane/screenshots/**/*.png
+**/ios/fastlane/test_output/
+
+
+# ============================================================
+# Go
+# ============================================================
+
+# Go build output
+bin/
+**/bin/
+
+# Compiled binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+
+# Coverage
+*.out
+coverage.out
+coverage.html
+
+# Go workspace temporary files
+go.work.sum
+
+# Air live reload
+.air.toml
+
+# Go vendor
+#
+# Keep vendor/ if you decide to vendor dependencies.
+# Otherwise ignore it.
+vendor/
+
+
+# ============================================================
+# Environment / Secrets
+# ============================================================
+
+
+
+.env.*
+!.env.example
+!.env.template
+
+# Local secrets
+secrets/
+*.secret
+*.pem
+*.key
+
+# TLS certificates
+*.crt
+*.cer
+*.p12
+*.pfx
+
+# JWT / signing keys
+jwt-private-key*
+jwt-private.pem
+private-key.pem
+service-account*.json
+
+
+# ============================================================
+# Docker
+# ============================================================
+
+# Docker override files
+docker-compose.override.yml
+docker-compose.local.yml
+
+# Docker local volumes
+.docker/
+docker-data/
+docker-volumes/
+
+# Local container data
+postgres-data/
+redis-data/
+minio-data/
+
+
+# ============================================================
+# PostgreSQL
+# ============================================================
+
+# PostgreSQL local data
+*.sql.gz
+*.dump
+*.backup
+
+# Local database dumps
+database/dumps/
+database/backups/
+
+# PostgreSQL temporary files
+postmaster.pid
+postmaster.opts
+
+
+# ============================================================
+# Redis
+# ============================================================
+
+dump.rdb
+appendonly.aof
+
+
+# ============================================================
+# MinIO / Object Storage
+# ============================================================
+
+.minio/
+minio-data/
+
+
+# ============================================================
+# Generated API Code
+# ============================================================
+
+# Generated OpenAPI clients
+api/generated/
+
+# If generated code is committed to Git,
+# remove the rule above.
+
+# Generated SQLC files
+database/sqlc/generated/
+
+# If SQLC generated code is committed,
+# remove the rule above.
+
+
+# ============================================================
+# Code Generation
+# ============================================================
+
+generated/
+**/generated/
+
+# Build/codegen temporary files
+.codegen/
+.tmp/
+temp/
+tmp/
+
+
+# ============================================================
+# Logs
+# ============================================================
+
+*.log
+logs/
+**/logs/
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Go logs
+*.log
+
+
+# ============================================================
+# Test / Benchmark Output
+# ============================================================
+
+test-results/
+test-output/
+benchmark-results/
+
+*.prof
+*.pprof
+
+
+# ============================================================
+# Flutter / Firebase
+# ============================================================
+
+# Firebase local emulator data
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# FlutterFire generated config
+#
+# Keep this ignored if it contains project-specific
+# Firebase configuration.
+firebase_options.dart
+
+
+# ============================================================
+# Code Coverage / Testing
+# ============================================================
+
+lcov.info
+*.lcov
+coverage/
+
+
+# ============================================================
+# Temporary Files
+# ============================================================
+
+*.tmp
+*.temp
+*.swp
+*.swo
+*.bak
+*~
+.#*
+*.orig
+
+
+# ============================================================
+# Documentation generated output
+# ============================================================
+
+docs/generated/
+docs/site/
+
+
+# ============================================================
+# CI/CD local files
+# ============================================================
+
+.github/local/
+.github/secrets/
+
+
+# ============================================================
+# Local Development
+# ============================================================
+
+.local/
+.local-dev/
+.dev/
+.devcontainer/.local/
+
+
+# ============================================================
+# OS-specific temporary files
+# ============================================================
+
+*.pid
+*.seed
+*.pid.lock
