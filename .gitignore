@@ -186,6 +186,7 @@ vendor/
 
 .env.*
 !.env.example
+
 !.env.template
 
 # Local secrets
