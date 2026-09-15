@@ -1,13 +1,17 @@
 version: "2"
+
 sql:
-  - schema: "database/migrations/"
-    queries: "database/queries/"
-    engine: "postgresql"
+  - engine: postgresql
+
+    schema: "../migrations/"
+
+    queries: "../queries/"
+
     gen:
       go:
-        package: "db"
-        out: "backend/services/api/internal/platform/postgres/db"
-        sql_package: "pgx/v5"
+        package: db
+        out: "../../backend/services/api/internal/platform/postgres/db"
+        sql_package: pgx/v5
         emit_json_tags: true
         emit_prepared_queries: false
         emit_interface: true
