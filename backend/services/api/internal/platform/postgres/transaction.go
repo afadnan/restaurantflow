@@ -6,7 +6,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"restaurantflow/internal/modules/order/domain"
+	"github.com/afadnan/restaurantflow/services/api/internal/modules/order/domain"
 )
 
 type DB struct {

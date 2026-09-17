@@ -32,9 +32,21 @@ type GetOrderByIDParams struct {
 	ID       pgtype.UUID `json:"id"`
 }
 
-func (q *Queries) GetOrderByID(ctx context.Context, arg GetOrderByIDParams) (Order, error) {
+type GetOrderByIDRow struct {
+	ID           pgtype.UUID        `json:"id"`
+	TenantID     pgtype.UUID        `json:"tenant_id"`
+	RestaurantID pgtype.UUID        `json:"restaurant_id"`
+	CustomerID   pgtype.UUID        `json:"customer_id"`
+	Status       OrderStatus        `json:"status"`
+	TotalAmount  pgtype.Numeric     `json:"total_amount"`
+	Currency     string             `json:"currency"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetOrderByID(ctx context.Context, arg GetOrderByIDParams) (GetOrderByIDRow, error) {
 	row := q.db.QueryRow(ctx, getOrderByID, arg.TenantID, arg.ID)
-	var i Order
+	var i GetOrderByIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.TenantID,

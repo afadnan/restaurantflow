@@ -11,7 +11,7 @@ import (
 	"github.com/coder/websocket"
 	"github.com/google/uuid"
 
-	"restaurantflow/internal/middleware"
+	"github.com/afadnan/restaurantflow/services/api/internal/middleware"
 )
 
 type Client struct {

@@ -8,7 +8,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"restaurantflow/internal/modules/order/domain"
+	"github.com/afadnan/restaurantflow/services/api/internal/modules/order/domain"
 )
 
 type Publisher struct {

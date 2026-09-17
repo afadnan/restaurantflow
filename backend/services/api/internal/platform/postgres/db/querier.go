@@ -9,7 +9,7 @@ import (
 )
 
 type Querier interface {
-	GetOrderByID(ctx context.Context, arg GetOrderByIDParams) (Order, error)
+	GetOrderByID(ctx context.Context, arg GetOrderByIDParams) (GetOrderByIDRow, error)
 }
 
 var _ Querier = (*Queries)(nil)

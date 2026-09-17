@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"restaurantflow/internal/modules/order/domain"
-	"restaurantflow/internal/platform/postgres"
+	"github.com/afadnan/restaurantflow/services/api/internal/modules/order/domain"
+	"github.com/afadnan/restaurantflow/services/api/internal/platform/postgres"
 )
 
 type UpdateKDSStateInput struct {

@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"restaurantflow/internal/platform/redis"
+	"github.com/afadnan/restaurantflow/services/api/internal/platform/redis"
 )
 
 type RealtimeBridge struct {

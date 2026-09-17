@@ -5,17 +5,675 @@
 package db
 
 import (
+	"database/sql/driver"
+	"fmt"
+
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type Order struct {
+type InventoryUnit string
+
+const (
+	InventoryUnitPiece      InventoryUnit = "piece"
+	InventoryUnitGram       InventoryUnit = "gram"
+	InventoryUnitKilogram   InventoryUnit = "kilogram"
+	InventoryUnitMilliliter InventoryUnit = "milliliter"
+	InventoryUnitLiter      InventoryUnit = "liter"
+	InventoryUnitOunce      InventoryUnit = "ounce"
+	InventoryUnitPound      InventoryUnit = "pound"
+)
+
+func (e *InventoryUnit) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = InventoryUnit(s)
+	case string:
+		*e = InventoryUnit(s)
+	default:
+		return fmt.Errorf("unsupported scan type for InventoryUnit: %T", src)
+	}
+	return nil
+}
+
+type NullInventoryUnit struct {
+	InventoryUnit InventoryUnit `json:"inventory_unit"`
+	Valid         bool          `json:"valid"` // Valid is true if InventoryUnit is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullInventoryUnit) Scan(value interface{}) error {
+	if value == nil {
+		ns.InventoryUnit, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.InventoryUnit.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullInventoryUnit) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.InventoryUnit), nil
+}
+
+type KdsStatus string
+
+const (
+	KdsStatusPending   KdsStatus = "pending"
+	KdsStatusPreparing KdsStatus = "preparing"
+	KdsStatusReady     KdsStatus = "ready"
+	KdsStatusCompleted KdsStatus = "completed"
+)
+
+func (e *KdsStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = KdsStatus(s)
+	case string:
+		*e = KdsStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for KdsStatus: %T", src)
+	}
+	return nil
+}
+
+type NullKdsStatus struct {
+	KdsStatus KdsStatus `json:"kds_status"`
+	Valid     bool      `json:"valid"` // Valid is true if KdsStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullKdsStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.KdsStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.KdsStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullKdsStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.KdsStatus), nil
+}
+
+type MenuItemStatus string
+
+const (
+	MenuItemStatusActive   MenuItemStatus = "active"
+	MenuItemStatusInactive MenuItemStatus = "inactive"
+	MenuItemStatusSoldOut  MenuItemStatus = "sold_out"
+)
+
+func (e *MenuItemStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = MenuItemStatus(s)
+	case string:
+		*e = MenuItemStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for MenuItemStatus: %T", src)
+	}
+	return nil
+}
+
+type NullMenuItemStatus struct {
+	MenuItemStatus MenuItemStatus `json:"menu_item_status"`
+	Valid          bool           `json:"valid"` // Valid is true if MenuItemStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullMenuItemStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.MenuItemStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.MenuItemStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullMenuItemStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.MenuItemStatus), nil
+}
+
+type OrderStatus string
+
+const (
+	OrderStatusPending   OrderStatus = "pending"
+	OrderStatusConfirmed OrderStatus = "confirmed"
+	OrderStatusPreparing OrderStatus = "preparing"
+	OrderStatusReady     OrderStatus = "ready"
+	OrderStatusCompleted OrderStatus = "completed"
+	OrderStatusCancelled OrderStatus = "cancelled"
+)
+
+func (e *OrderStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = OrderStatus(s)
+	case string:
+		*e = OrderStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for OrderStatus: %T", src)
+	}
+	return nil
+}
+
+type NullOrderStatus struct {
+	OrderStatus OrderStatus `json:"order_status"`
+	Valid       bool        `json:"valid"` // Valid is true if OrderStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullOrderStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.OrderStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.OrderStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullOrderStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.OrderStatus), nil
+}
+
+type OrderType string
+
+const (
+	OrderTypeDineIn   OrderType = "dine_in"
+	OrderTypeTakeaway OrderType = "takeaway"
+	OrderTypeDelivery OrderType = "delivery"
+)
+
+func (e *OrderType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = OrderType(s)
+	case string:
+		*e = OrderType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for OrderType: %T", src)
+	}
+	return nil
+}
+
+type NullOrderType struct {
+	OrderType OrderType `json:"order_type"`
+	Valid     bool      `json:"valid"` // Valid is true if OrderType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullOrderType) Scan(value interface{}) error {
+	if value == nil {
+		ns.OrderType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.OrderType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullOrderType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.OrderType), nil
+}
+
+type PaymentStatus string
+
+const (
+	PaymentStatusPending     PaymentStatus = "pending"
+	PaymentStatusPaid        PaymentStatus = "paid"
+	PaymentStatusFailed      PaymentStatus = "failed"
+	PaymentStatusRefunded    PaymentStatus = "refunded"
+	PaymentStatusNotRequired PaymentStatus = "not_required"
+)
+
+func (e *PaymentStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = PaymentStatus(s)
+	case string:
+		*e = PaymentStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for PaymentStatus: %T", src)
+	}
+	return nil
+}
+
+type NullPaymentStatus struct {
+	PaymentStatus PaymentStatus `json:"payment_status"`
+	Valid         bool          `json:"valid"` // Valid is true if PaymentStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullPaymentStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.PaymentStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.PaymentStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullPaymentStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.PaymentStatus), nil
+}
+
+type RestaurantStatus string
+
+const (
+	RestaurantStatusActive    RestaurantStatus = "active"
+	RestaurantStatusInactive  RestaurantStatus = "inactive"
+	RestaurantStatusSuspended RestaurantStatus = "suspended"
+)
+
+func (e *RestaurantStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = RestaurantStatus(s)
+	case string:
+		*e = RestaurantStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for RestaurantStatus: %T", src)
+	}
+	return nil
+}
+
+type NullRestaurantStatus struct {
+	RestaurantStatus RestaurantStatus `json:"restaurant_status"`
+	Valid            bool             `json:"valid"` // Valid is true if RestaurantStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullRestaurantStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.RestaurantStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.RestaurantStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullRestaurantStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.RestaurantStatus), nil
+}
+
+type RestaurantTableStatus string
+
+const (
+	RestaurantTableStatusAvailable RestaurantTableStatus = "available"
+	RestaurantTableStatusOccupied  RestaurantTableStatus = "occupied"
+	RestaurantTableStatusReserved  RestaurantTableStatus = "reserved"
+	RestaurantTableStatusInactive  RestaurantTableStatus = "inactive"
+)
+
+func (e *RestaurantTableStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = RestaurantTableStatus(s)
+	case string:
+		*e = RestaurantTableStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for RestaurantTableStatus: %T", src)
+	}
+	return nil
+}
+
+type NullRestaurantTableStatus struct {
+	RestaurantTableStatus RestaurantTableStatus `json:"restaurant_table_status"`
+	Valid                 bool                  `json:"valid"` // Valid is true if RestaurantTableStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullRestaurantTableStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.RestaurantTableStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.RestaurantTableStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullRestaurantTableStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.RestaurantTableStatus), nil
+}
+
+type UserRole string
+
+const (
+	UserRoleOwner   UserRole = "owner"
+	UserRoleAdmin   UserRole = "admin"
+	UserRoleManager UserRole = "manager"
+	UserRoleStaff   UserRole = "staff"
+	UserRoleKitchen UserRole = "kitchen"
+	UserRoleCashier UserRole = "cashier"
+)
+
+func (e *UserRole) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = UserRole(s)
+	case string:
+		*e = UserRole(s)
+	default:
+		return fmt.Errorf("unsupported scan type for UserRole: %T", src)
+	}
+	return nil
+}
+
+type NullUserRole struct {
+	UserRole UserRole `json:"user_role"`
+	Valid    bool     `json:"valid"` // Valid is true if UserRole is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullUserRole) Scan(value interface{}) error {
+	if value == nil {
+		ns.UserRole, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.UserRole.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullUserRole) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.UserRole), nil
+}
+
+type UserStatus string
+
+const (
+	UserStatusActive    UserStatus = "active"
+	UserStatusInactive  UserStatus = "inactive"
+	UserStatusSuspended UserStatus = "suspended"
+)
+
+func (e *UserStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = UserStatus(s)
+	case string:
+		*e = UserStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for UserStatus: %T", src)
+	}
+	return nil
+}
+
+type NullUserStatus struct {
+	UserStatus UserStatus `json:"user_status"`
+	Valid      bool       `json:"valid"` // Valid is true if UserStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullUserStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.UserStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.UserStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullUserStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.UserStatus), nil
+}
+
+type Ingredient struct {
 	ID           pgtype.UUID        `json:"id"`
 	TenantID     pgtype.UUID        `json:"tenant_id"`
 	RestaurantID pgtype.UUID        `json:"restaurant_id"`
-	CustomerID   pgtype.UUID        `json:"customer_id"`
-	Status       string             `json:"status"`
-	TotalAmount  pgtype.Numeric     `json:"total_amount"`
-	Currency     string             `json:"currency"`
+	Name         string             `json:"name"`
+	Sku          pgtype.Text        `json:"sku"`
+	Unit         InventoryUnit      `json:"unit"`
+	Description  pgtype.Text        `json:"description"`
+	IsActive     bool               `json:"is_active"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+type Inventory struct {
+	ID                pgtype.UUID        `json:"id"`
+	TenantID          pgtype.UUID        `json:"tenant_id"`
+	RestaurantID      pgtype.UUID        `json:"restaurant_id"`
+	IngredientID      pgtype.UUID        `json:"ingredient_id"`
+	Quantity          pgtype.Numeric     `json:"quantity"`
+	LowStockThreshold pgtype.Numeric     `json:"low_stock_threshold"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+}
+
+type KdsStatusHistory struct {
+	ID          pgtype.UUID        `json:"id"`
+	TenantID    pgtype.UUID        `json:"tenant_id"`
+	KdsTicketID pgtype.UUID        `json:"kds_ticket_id"`
+	FromStatus  NullKdsStatus      `json:"from_status"`
+	ToStatus    KdsStatus          `json:"to_status"`
+	ChangedBy   pgtype.UUID        `json:"changed_by"`
+	ChangedAt   pgtype.Timestamptz `json:"changed_at"`
+}
+
+type KdsTicket struct {
+	ID           pgtype.UUID        `json:"id"`
+	TenantID     pgtype.UUID        `json:"tenant_id"`
+	RestaurantID pgtype.UUID        `json:"restaurant_id"`
+	OrderID      pgtype.UUID        `json:"order_id"`
+	Status       KdsStatus          `json:"status"`
+	Priority     int32              `json:"priority"`
+	StartedAt    pgtype.Timestamptz `json:"started_at"`
+	ReadyAt      pgtype.Timestamptz `json:"ready_at"`
+	CompletedAt  pgtype.Timestamptz `json:"completed_at"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+type KdsTicketItem struct {
+	ID          pgtype.UUID        `json:"id"`
+	TenantID    pgtype.UUID        `json:"tenant_id"`
+	KdsTicketID pgtype.UUID        `json:"kds_ticket_id"`
+	OrderItemID pgtype.UUID        `json:"order_item_id"`
+	ItemName    string             `json:"item_name"`
+	Quantity    int32              `json:"quantity"`
+	Notes       pgtype.Text        `json:"notes"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
+type MenuAddon struct {
+	ID           pgtype.UUID        `json:"id"`
+	TenantID     pgtype.UUID        `json:"tenant_id"`
+	RestaurantID pgtype.UUID        `json:"restaurant_id"`
+	Name         string             `json:"name"`
+	Description  pgtype.Text        `json:"description"`
+	Price        pgtype.Numeric     `json:"price"`
+	IsActive     bool               `json:"is_active"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+type MenuCategory struct {
+	ID           pgtype.UUID        `json:"id"`
+	TenantID     pgtype.UUID        `json:"tenant_id"`
+	RestaurantID pgtype.UUID        `json:"restaurant_id"`
+	Name         string             `json:"name"`
+	Description  pgtype.Text        `json:"description"`
+	SortOrder    int32              `json:"sort_order"`
+	IsActive     bool               `json:"is_active"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+type MenuItem struct {
+	ID           pgtype.UUID        `json:"id"`
+	TenantID     pgtype.UUID        `json:"tenant_id"`
+	RestaurantID pgtype.UUID        `json:"restaurant_id"`
+	CategoryID   pgtype.UUID        `json:"category_id"`
+	Name         string             `json:"name"`
+	Description  pgtype.Text        `json:"description"`
+	Sku          pgtype.Text        `json:"sku"`
+	Price        pgtype.Numeric     `json:"price"`
+	Status       MenuItemStatus     `json:"status"`
+	ImageUrl     pgtype.Text        `json:"image_url"`
+	SortOrder    int32              `json:"sort_order"`
+	IsVegetarian bool               `json:"is_vegetarian"`
+	IsVegan      bool               `json:"is_vegan"`
+	IsAvailable  bool               `json:"is_available"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+type MenuItemAddon struct {
+	TenantID    pgtype.UUID `json:"tenant_id"`
+	MenuItemID  pgtype.UUID `json:"menu_item_id"`
+	AddonID     pgtype.UUID `json:"addon_id"`
+	IsRequired  bool        `json:"is_required"`
+	MaxQuantity int32       `json:"max_quantity"`
+}
+
+type MenuItemIngredient struct {
+	TenantID         pgtype.UUID    `json:"tenant_id"`
+	MenuItemID       pgtype.UUID    `json:"menu_item_id"`
+	IngredientID     pgtype.UUID    `json:"ingredient_id"`
+	QuantityRequired pgtype.Numeric `json:"quantity_required"`
+}
+
+type Order struct {
+	ID             pgtype.UUID        `json:"id"`
+	TenantID       pgtype.UUID        `json:"tenant_id"`
+	RestaurantID   pgtype.UUID        `json:"restaurant_id"`
+	TableID        pgtype.UUID        `json:"table_id"`
+	CustomerID     pgtype.UUID        `json:"customer_id"`
+	OrderNumber    pgtype.Int8        `json:"order_number"`
+	OrderType      OrderType          `json:"order_type"`
+	Status         OrderStatus        `json:"status"`
+	PaymentStatus  PaymentStatus      `json:"payment_status"`
+	Subtotal       pgtype.Numeric     `json:"subtotal"`
+	TaxAmount      pgtype.Numeric     `json:"tax_amount"`
+	DiscountAmount pgtype.Numeric     `json:"discount_amount"`
+	ServiceFee     pgtype.Numeric     `json:"service_fee"`
+	TotalAmount    pgtype.Numeric     `json:"total_amount"`
+	Currency       string             `json:"currency"`
+	CustomerName   pgtype.Text        `json:"customer_name"`
+	CustomerPhone  pgtype.Text        `json:"customer_phone"`
+	Notes          pgtype.Text        `json:"notes"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	CompletedAt    pgtype.Timestamptz `json:"completed_at"`
+	CancelledAt    pgtype.Timestamptz `json:"cancelled_at"`
+}
+
+type OrderItem struct {
+	ID         pgtype.UUID        `json:"id"`
+	TenantID   pgtype.UUID        `json:"tenant_id"`
+	OrderID    pgtype.UUID        `json:"order_id"`
+	MenuItemID pgtype.UUID        `json:"menu_item_id"`
+	ItemName   string             `json:"item_name"`
+	UnitPrice  pgtype.Numeric     `json:"unit_price"`
+	Quantity   int32              `json:"quantity"`
+	Subtotal   pgtype.Numeric     `json:"subtotal"`
+	Notes      pgtype.Text        `json:"notes"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
+type OrderItemAddon struct {
+	ID          pgtype.UUID    `json:"id"`
+	TenantID    pgtype.UUID    `json:"tenant_id"`
+	OrderItemID pgtype.UUID    `json:"order_item_id"`
+	AddonID     pgtype.UUID    `json:"addon_id"`
+	AddonName   string         `json:"addon_name"`
+	UnitPrice   pgtype.Numeric `json:"unit_price"`
+	Quantity    int32          `json:"quantity"`
+	Subtotal    pgtype.Numeric `json:"subtotal"`
+}
+
+type Restaurant struct {
+	ID           pgtype.UUID        `json:"id"`
+	TenantID     pgtype.UUID        `json:"tenant_id"`
+	Name         string             `json:"name"`
+	Slug         string             `json:"slug"`
+	Description  pgtype.Text        `json:"description"`
+	Phone        pgtype.Text        `json:"phone"`
+	Email        pgtype.Text        `json:"email"`
+	AddressLine1 pgtype.Text        `json:"address_line_1"`
+	AddressLine2 pgtype.Text        `json:"address_line_2"`
+	City         pgtype.Text        `json:"city"`
+	State        pgtype.Text        `json:"state"`
+	PostalCode   pgtype.Text        `json:"postal_code"`
+	Country      string             `json:"country"`
+	Latitude     pgtype.Numeric     `json:"latitude"`
+	Longitude    pgtype.Numeric     `json:"longitude"`
+	Status       RestaurantStatus   `json:"status"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+type RestaurantTable struct {
+	ID           pgtype.UUID           `json:"id"`
+	TenantID     pgtype.UUID           `json:"tenant_id"`
+	RestaurantID pgtype.UUID           `json:"restaurant_id"`
+	TableNumber  string                `json:"table_number"`
+	DisplayName  pgtype.Text           `json:"display_name"`
+	Capacity     int32                 `json:"capacity"`
+	Status       RestaurantTableStatus `json:"status"`
+	QrToken      string                `json:"qr_token"`
+	CreatedAt    pgtype.Timestamptz    `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz    `json:"updated_at"`
+}
+
+type Tenant struct {
+	ID        pgtype.UUID        `json:"id"`
+	Name      string             `json:"name"`
+	Slug      string             `json:"slug"`
+	Status    string             `json:"status"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+type User struct {
+	ID           pgtype.UUID        `json:"id"`
+	TenantID     pgtype.UUID        `json:"tenant_id"`
+	Email        string             `json:"email"`
+	Phone        pgtype.Text        `json:"phone"`
+	PasswordHash string             `json:"password_hash"`
+	FirstName    string             `json:"first_name"`
+	LastName     pgtype.Text        `json:"last_name"`
+	Role         UserRole           `json:"role"`
+	Status       UserStatus         `json:"status"`
+	LastLoginAt  pgtype.Timestamptz `json:"last_login_at"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 }

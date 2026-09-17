@@ -7,9 +7,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"restaurantflow/internal/middleware"
-	"restaurantflow/internal/modules/order/domain"
-	"restaurantflow/internal/modules/order/usecase"
+	"github.com/afadnan/restaurantflow/services/api/internal/middleware"
+	"github.com/afadnan/restaurantflow/services/api/internal/modules/order/domain"
+	"github.com/afadnan/restaurantflow/services/api/internal/modules/order/usecase"
 )
 
 type OrderHandler struct {
