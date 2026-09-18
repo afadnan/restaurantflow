@@ -10,5 +10,6 @@ SELECT
     created_at,
     updated_at
 FROM orders
+
 WHERE tenant_id = $1
   AND id = $2;
