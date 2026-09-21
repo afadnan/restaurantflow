@@ -63,7 +63,7 @@ func (uc *UpdateKDSStateUseCase) Execute(
 		return domain.ErrInvalidKDSState
 	}
 
-	tx, err := uc.DB.BeginTx(ctx)
+	tx, err := uc.DB.BeginTx(ctx, input.TenantID)
 	if err != nil {
 		return fmt.Errorf("begin kds state transaction: %w", err)
 	}

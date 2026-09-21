@@ -13,8 +13,8 @@ import (
 )
 
 type OrderHandler struct {
-	CreateOrder    *usecase.CreateOrderUseCase
-	UpdateKDSState *usecase.UpdateKDSStateUseCase
+	CreateOrderUseCase    *usecase.CreateOrderUseCase
+	UpdateKDSStateUseCase *usecase.UpdateKDSStateUseCase
 }
 
 func NewOrderHandler(
@@ -22,8 +22,8 @@ func NewOrderHandler(
 	updateKDSState *usecase.UpdateKDSStateUseCase,
 ) *OrderHandler {
 	return &OrderHandler{
-		CreateOrder:    createOrder,
-		UpdateKDSState: updateKDSState,
+		CreateOrderUseCase:    createOrder,
+		UpdateKDSStateUseCase: updateKDSState,
 	}
 }
 
@@ -68,22 +68,36 @@ func (h *OrderHandler) CreateOrder(
 		return
 	}
 
-	items := make([]usecase.CreateOrderItemInput, 0, len(request.Items))
+	items := make(
+		[]usecase.CreateOrderItemInput,
+		0,
+		len(request.Items),
+	)
 
 	for _, item := range request.Items {
-		items = append(items, usecase.CreateOrderItemInput{
-			ProductID: item.ProductID,
-			Name:      item.Name,
-			Quantity:  item.Quantity,
-			UnitPrice: item.UnitPrice,
-		})
+		items = append(
+			items,
+			usecase.CreateOrderItemInput{
+				ProductID: item.ProductID,
+				Name:      item.Name,
+				Quantity:  item.Quantity,
+				UnitPrice: item.UnitPrice,
+			},
+		)
 	}
 
-	order, err := h.CreateOrder.Execute(
+	var customerID *uuid.UUID
+
+	if request.CustomerID != uuid.Nil {
+		id := request.CustomerID
+		customerID = &id
+	}
+
+	order, err := h.CreateOrderUseCase.Execute(
 		r.Context(),
 		usecase.CreateOrderInput{
 			TenantID:   tenantID,
-			CustomerID: request.CustomerID,
+			CustomerID: customerID,
 			Currency:   request.Currency,
 			Items:      items,
 		},
@@ -144,7 +158,7 @@ func (h *OrderHandler) UpdateKDSState(
 		return
 	}
 
-	err = h.UpdateKDSState.Execute(
+	err = h.UpdateKDSStateUseCase.Execute(
 		r.Context(),
 		usecase.UpdateKDSStateInput{
 			TenantID: tenantID,
@@ -152,7 +166,6 @@ func (h *OrderHandler) UpdateKDSState(
 			State:    request.State,
 		},
 	)
-
 	if err != nil {
 		writeDomainError(w, err)
 		return
@@ -166,9 +179,12 @@ func writeDomainError(
 	err error,
 ) {
 	switch {
-	case errors.Is(err, domain.ErrInvalidTenantID),
-		errors.Is(err, domain.ErrTenantMissing):
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+	case errors.Is(err, domain.ErrInvalidTenantID):
+		http.Error(
+			w,
+			"unauthorized",
+			http.StatusUnauthorized,
+		)
 
 	case errors.Is(err, domain.ErrInvalidOrderID),
 		errors.Is(err, domain.ErrInvalidOrderItems),
@@ -176,14 +192,26 @@ func writeDomainError(
 		errors.Is(err, domain.ErrInvalidPrice),
 		errors.Is(err, domain.ErrInvalidKDSState),
 		errors.Is(err, domain.ErrInvalidStateTransition):
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(
+			w,
+			err.Error(),
+			http.StatusBadRequest,
+		)
 
 	case errors.Is(err, domain.ErrOrderNotFound),
 		errors.Is(err, domain.ErrKDSNotFound):
-		http.Error(w, err.Error(), http.StatusNotFound)
+		http.Error(
+			w,
+			err.Error(),
+			http.StatusNotFound,
+		)
 
 	case errors.Is(err, domain.ErrInsufficientStock):
-		http.Error(w, err.Error(), http.StatusConflict)
+		http.Error(
+			w,
+			err.Error(),
+			http.StatusConflict,
+		)
 
 	default:
 		http.Error(
@@ -199,7 +227,11 @@ func writeJSON(
 	status int,
 	value any,
 ) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(
+		"Content-Type",
+		"application/json",
+	)
+
 	w.WriteHeader(status)
 
 	_ = json.NewEncoder(w).Encode(value)

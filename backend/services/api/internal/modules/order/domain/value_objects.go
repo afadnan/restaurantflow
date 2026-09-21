@@ -1,71 +1,111 @@
 package domain
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/google/uuid"
 )
 
-type TenantID uuid.UUID
+type TenantID struct {
+	value uuid.UUID
+}
 
 func NewTenantID(id uuid.UUID) (TenantID, error) {
 	if id == uuid.Nil {
 		return TenantID{}, ErrInvalidTenantID
 	}
 
-	return TenantID(id), nil
+	return TenantID{value: id}, nil
 }
 
 func (id TenantID) UUID() uuid.UUID {
-	return uuid.UUID(id)
+	return id.value
 }
 
-type OrderID uuid.UUID
+type RestaurantID struct {
+	value uuid.UUID
+}
+
+func NewRestaurantID(id uuid.UUID) (RestaurantID, error) {
+	if id == uuid.Nil {
+		return RestaurantID{}, ErrInvalidRestaurantID
+	}
+
+	return RestaurantID{value: id}, nil
+}
+
+func (id RestaurantID) UUID() uuid.UUID {
+	return id.value
+}
+
+type TableID struct {
+	value uuid.UUID
+}
+
+func NewTableID(id uuid.UUID) (TableID, error) {
+	if id == uuid.Nil {
+		return TableID{}, ErrInvalidTableID
+	}
+
+	return TableID{value: id}, nil
+}
+
+func (id TableID) UUID() uuid.UUID {
+	return id.value
+}
+
+type OrderID struct {
+	value uuid.UUID
+}
 
 func NewOrderID() OrderID {
-	return OrderID(uuid.New())
+	return OrderID{
+		value: uuid.New(),
+	}
 }
 
-func ParseOrderID(value string) (OrderID, error) {
-	id, err := uuid.Parse(strings.TrimSpace(value))
-	if err != nil || id == uuid.Nil {
+func NewOrderIDFromUUID(id uuid.UUID) (OrderID, error) {
+	if id == uuid.Nil {
 		return OrderID{}, ErrInvalidOrderID
 	}
 
-	return OrderID(id), nil
+	return OrderID{value: id}, nil
 }
 
 func (id OrderID) UUID() uuid.UUID {
-	return uuid.UUID(id)
+	return id.value
 }
 
-type CustomerID uuid.UUID
+type CustomerID struct {
+	value uuid.UUID
+}
 
 func NewCustomerID(id uuid.UUID) (CustomerID, error) {
 	if id == uuid.Nil {
 		return CustomerID{}, ErrInvalidCustomerID
 	}
 
-	return CustomerID(id), nil
+	return CustomerID{value: id}, nil
 }
 
 func (id CustomerID) UUID() uuid.UUID {
-	return uuid.UUID(id)
+	return id.value
 }
 
-type ProductID uuid.UUID
+type ProductID struct {
+	value uuid.UUID
+}
 
 func NewProductID(id uuid.UUID) (ProductID, error) {
 	if id == uuid.Nil {
 		return ProductID{}, ErrInvalidProductID
 	}
 
-	return ProductID(id), nil
+	return ProductID{value: id}, nil
 }
 
 func (id ProductID) UUID() uuid.UUID {
-	return uuid.UUID(id)
+	return id.value
 }
 
 type Money struct {
@@ -76,12 +116,12 @@ type Money struct {
 func NewMoney(minorUnits int64, currency string) (Money, error) {
 	currency = strings.ToUpper(strings.TrimSpace(currency))
 
-	if minorUnits < 0 {
+	if len(currency) != 3 {
 		return Money{}, ErrInvalidPrice
 	}
 
-	if len(currency) != 3 {
-		return Money{}, fmt.Errorf("invalid currency: %s", currency)
+	if minorUnits < 0 {
+		return Money{}, ErrInvalidPrice
 	}
 
 	return Money{
@@ -92,11 +132,26 @@ func NewMoney(minorUnits int64, currency string) (Money, error) {
 
 func (m Money) Add(other Money) (Money, error) {
 	if m.Currency != other.Currency {
-		return Money{}, fmt.Errorf("currency mismatch: %s/%s", m.Currency, other.Currency)
+		return Money{}, ErrCurrencyMismatch
 	}
 
 	return Money{
 		MinorUnits: m.MinorUnits + other.MinorUnits,
+		Currency:   m.Currency,
+	}, nil
+}
+
+func (m Money) Subtract(other Money) (Money, error) {
+	if m.Currency != other.Currency {
+		return Money{}, ErrCurrencyMismatch
+	}
+
+	if other.MinorUnits > m.MinorUnits {
+		return Money{}, ErrInvalidPrice
+	}
+
+	return Money{
+		MinorUnits: m.MinorUnits - other.MinorUnits,
 		Currency:   m.Currency,
 	}, nil
 }
@@ -111,6 +166,6 @@ func NewQuantity(value int32) (Quantity, error) {
 	return Quantity(value), nil
 }
 
-func (q Quantity) Int32() int32 {
+func (q Quantity) Value() int32 {
 	return int32(q)
 }

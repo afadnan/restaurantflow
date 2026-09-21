@@ -2,8 +2,6 @@ package usecase
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -13,10 +11,24 @@ import (
 )
 
 type CreateOrderInput struct {
-	TenantID   uuid.UUID
-	CustomerID uuid.UUID
-	Currency   string
-	Items      []CreateOrderItemInput
+	TenantID     uuid.UUID
+	RestaurantID uuid.UUID
+	TableID      *uuid.UUID
+	CustomerID   *uuid.UUID
+
+	OrderType     domain.OrderType
+	PaymentStatus domain.PaymentStatus
+
+	Currency       string
+	TaxAmount      int64
+	DiscountAmount int64
+	ServiceFee     int64
+
+	CustomerName  string
+	CustomerPhone string
+	Notes         string
+
+	Items []CreateOrderItemInput
 }
 
 type CreateOrderItemInput struct {
@@ -24,6 +36,7 @@ type CreateOrderItemInput struct {
 	Name      string
 	Quantity  int32
 	UnitPrice int64
+	Notes     string
 }
 
 type CreateOrderUseCase struct {
@@ -35,58 +48,39 @@ type CreateOrderUseCase struct {
 	Clock     func() time.Time
 }
 
-func NewCreateOrderUseCase(
-	db *postgres.DB,
-	orders domain.OrderRepository,
-	kds domain.KDSRepository,
-	inventory domain.InventoryRepository,
-	events domain.EventRepository,
-) *CreateOrderUseCase {
-	return &CreateOrderUseCase{
-		DB:        db,
-		Orders:    orders,
-		KDS:       kds,
-		Inventory: inventory,
-		Events:    events,
-		Clock:     time.Now,
-	}
-}
-
 func (uc *CreateOrderUseCase) Execute(
 	ctx context.Context,
 	input CreateOrderInput,
 ) (*domain.Order, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-
 	if input.TenantID == uuid.Nil {
 		return nil, domain.ErrInvalidTenantID
 	}
 
-	if input.CustomerID == uuid.Nil {
-		return nil, domain.ErrInvalidCustomerID
+	if input.RestaurantID == uuid.Nil {
+		return nil, domain.ErrInvalidRestaurantID
 	}
 
-	if len(input.Items) == 0 {
-		return nil, domain.ErrInvalidOrderItems
+	now := time.Now().UTC()
+
+	if uc.Clock != nil {
+		now = uc.Clock().UTC()
 	}
 
 	currency := input.Currency
 
+	if currency == "" {
+		currency = "INR"
+	}
+
 	items := make([]domain.OrderItem, 0, len(input.Items))
 
 	for _, itemInput := range input.Items {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-
 		money, err := domain.NewMoney(
 			itemInput.UnitPrice,
 			currency,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("create order item price: %w", err)
+			return nil, err
 		}
 
 		item, err := domain.NewOrderItem(
@@ -94,76 +88,83 @@ func (uc *CreateOrderUseCase) Execute(
 			itemInput.Name,
 			itemInput.Quantity,
 			money,
+			itemInput.Notes,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("create order item: %w", err)
+			return nil, err
 		}
 
 		items = append(items, item)
 	}
 
-	now := uc.Clock().UTC()
-
-	order, err := domain.NewOrder(
-		input.TenantID,
-		input.CustomerID,
-		items,
-		now,
-	)
+	order, err := domain.NewOrder(domain.NewOrderParams{
+		TenantID:       input.TenantID,
+		RestaurantID:   input.RestaurantID,
+		TableID:        input.TableID,
+		CustomerID:     input.CustomerID,
+		OrderType:      input.OrderType,
+		PaymentStatus:  input.PaymentStatus,
+		Currency:       currency,
+		TaxAmount:      input.TaxAmount,
+		DiscountAmount: input.DiscountAmount,
+		ServiceFee:     input.ServiceFee,
+		CustomerName:   input.CustomerName,
+		CustomerPhone:  input.CustomerPhone,
+		Notes:          input.Notes,
+		Items:          items,
+		Now:            now,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("create order domain entity: %w", err)
+		return nil, err
 	}
 
 	kdsOrder, err := domain.NewKDSOrder(
-		input.TenantID,
+		order.TenantID.UUID(),
+		order.RestaurantID.UUID(),
 		order.ID,
 		now,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("create kds entity: %w", err)
+		return nil, err
 	}
 
-	tx, err := uc.DB.BeginTx(ctx)
+	tx, err := uc.DB.BeginTx(ctx, order.TenantID.UUID())
 	if err != nil {
-		return nil, fmt.Errorf("begin order transaction: %w", err)
+		return nil, err
 	}
-
-	committed := false
 
 	defer func() {
-		if !committed {
-			rollbackCtx := context.WithoutCancel(ctx)
-
-			if rollbackErr := tx.Rollback(rollbackCtx); rollbackErr != nil &&
-				!errors.Is(rollbackErr, context.Canceled) {
-				// The original transaction error is more important.
-				// Rollback failure is intentionally not returned here.
-			}
-		}
+		_ = tx.Rollback(ctx)
 	}()
 
 	if err := uc.Orders.Create(ctx, tx, order); err != nil {
-		return nil, fmt.Errorf("persist order: %w", err)
+		return nil, err
 	}
 
 	if err := uc.KDS.Create(ctx, tx, kdsOrder); err != nil {
-		return nil, fmt.Errorf("persist kds order: %w", err)
+		return nil, err
 	}
 
 	if err := uc.Inventory.DeductIngredientsForOrder(
 		ctx,
 		tx,
-		input.TenantID,
+		order.TenantID.UUID(),
 		order,
 	); err != nil {
-		return nil, fmt.Errorf("deduct ingredients: %w", err)
+		return nil, err
+	}
+
+	var customerID uuid.UUID
+
+	if order.CustomerID != nil {
+		customerID = order.CustomerID.UUID()
 	}
 
 	event := domain.OrderCreatedEvent{
 		EventID:     uuid.New(),
-		TenantID:    input.TenantID,
+		TenantID:    order.TenantID.UUID(),
 		OrderID:     order.ID.UUID(),
-		CustomerID:  input.CustomerID,
+		CustomerID:  customerID,
 		State:       order.State,
 		TotalMinor:  order.Total.MinorUnits,
 		Currency:    order.Total.Currency,
@@ -171,14 +172,12 @@ func (uc *CreateOrderUseCase) Execute(
 	}
 
 	if err := uc.Events.Append(ctx, tx, event); err != nil {
-		return nil, fmt.Errorf("append order created event: %w", err)
+		return nil, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("commit order transaction: %w", err)
+		return nil, err
 	}
-
-	committed = true
 
 	return order, nil
 }

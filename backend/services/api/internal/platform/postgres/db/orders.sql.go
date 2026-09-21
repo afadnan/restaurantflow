@@ -11,17 +11,294 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const cancelOrder = `-- name: CancelOrder :one
+UPDATE orders
+SET
+    status = 'cancelled',
+    cancelled_at = NOW(),
+    updated_at = NOW()
+WHERE tenant_id = $1
+  AND id = $2
+RETURNING
+    id,
+    tenant_id,
+    restaurant_id,
+    table_id,
+    customer_id,
+    order_number,
+    order_type,
+    status,
+    payment_status,
+    subtotal,
+    tax_amount,
+    discount_amount,
+    service_fee,
+    total_amount,
+    currency,
+    customer_name,
+    customer_phone,
+    notes,
+    created_at,
+    updated_at,
+    completed_at,
+    cancelled_at
+`
+
+type CancelOrderParams struct {
+	TenantID pgtype.UUID `json:"tenant_id"`
+	ID       pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) CancelOrder(ctx context.Context, arg CancelOrderParams) (Order, error) {
+	row := q.db.QueryRow(ctx, cancelOrder, arg.TenantID, arg.ID)
+	var i Order
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.RestaurantID,
+		&i.TableID,
+		&i.CustomerID,
+		&i.OrderNumber,
+		&i.OrderType,
+		&i.Status,
+		&i.PaymentStatus,
+		&i.Subtotal,
+		&i.TaxAmount,
+		&i.DiscountAmount,
+		&i.ServiceFee,
+		&i.TotalAmount,
+		&i.Currency,
+		&i.CustomerName,
+		&i.CustomerPhone,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CompletedAt,
+		&i.CancelledAt,
+	)
+	return i, err
+}
+
+const completeOrder = `-- name: CompleteOrder :one
+UPDATE orders
+SET
+    status = 'completed',
+    completed_at = NOW(),
+    updated_at = NOW()
+WHERE tenant_id = $1
+  AND id = $2
+RETURNING
+    id,
+    tenant_id,
+    restaurant_id,
+    table_id,
+    customer_id,
+    order_number,
+    order_type,
+    status,
+    payment_status,
+    subtotal,
+    tax_amount,
+    discount_amount,
+    service_fee,
+    total_amount,
+    currency,
+    customer_name,
+    customer_phone,
+    notes,
+    created_at,
+    updated_at,
+    completed_at,
+    cancelled_at
+`
+
+type CompleteOrderParams struct {
+	TenantID pgtype.UUID `json:"tenant_id"`
+	ID       pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) CompleteOrder(ctx context.Context, arg CompleteOrderParams) (Order, error) {
+	row := q.db.QueryRow(ctx, completeOrder, arg.TenantID, arg.ID)
+	var i Order
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.RestaurantID,
+		&i.TableID,
+		&i.CustomerID,
+		&i.OrderNumber,
+		&i.OrderType,
+		&i.Status,
+		&i.PaymentStatus,
+		&i.Subtotal,
+		&i.TaxAmount,
+		&i.DiscountAmount,
+		&i.ServiceFee,
+		&i.TotalAmount,
+		&i.Currency,
+		&i.CustomerName,
+		&i.CustomerPhone,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CompletedAt,
+		&i.CancelledAt,
+	)
+	return i, err
+}
+
+const createOrder = `-- name: CreateOrder :one
+INSERT INTO orders (
+    tenant_id,
+    restaurant_id,
+    table_id,
+    customer_id,
+    order_type,
+    status,
+    payment_status,
+    subtotal,
+    tax_amount,
+    discount_amount,
+    service_fee,
+    total_amount,
+    currency,
+    customer_name,
+    customer_phone,
+    notes
+)
+VALUES (
+    $1,
+    $2,
+    $3,
+    $4,
+    $5,
+    $6,
+    $7,
+    $8,
+    $9,
+    $10,
+    $11,
+    $12,
+    $13,
+    $14,
+    $15,
+    $16
+)
+RETURNING
+    id,
+    tenant_id,
+    restaurant_id,
+    table_id,
+    customer_id,
+    order_number,
+    order_type,
+    status,
+    payment_status,
+    subtotal,
+    tax_amount,
+    discount_amount,
+    service_fee,
+    total_amount,
+    currency,
+    customer_name,
+    customer_phone,
+    notes,
+    created_at,
+    updated_at,
+    completed_at,
+    cancelled_at
+`
+
+type CreateOrderParams struct {
+	TenantID       pgtype.UUID    `json:"tenant_id"`
+	RestaurantID   pgtype.UUID    `json:"restaurant_id"`
+	TableID        pgtype.UUID    `json:"table_id"`
+	CustomerID     pgtype.UUID    `json:"customer_id"`
+	OrderType      OrderType      `json:"order_type"`
+	Status         OrderStatus    `json:"status"`
+	PaymentStatus  PaymentStatus  `json:"payment_status"`
+	Subtotal       pgtype.Numeric `json:"subtotal"`
+	TaxAmount      pgtype.Numeric `json:"tax_amount"`
+	DiscountAmount pgtype.Numeric `json:"discount_amount"`
+	ServiceFee     pgtype.Numeric `json:"service_fee"`
+	TotalAmount    pgtype.Numeric `json:"total_amount"`
+	Currency       string         `json:"currency"`
+	CustomerName   pgtype.Text    `json:"customer_name"`
+	CustomerPhone  pgtype.Text    `json:"customer_phone"`
+	Notes          pgtype.Text    `json:"notes"`
+}
+
+func (q *Queries) CreateOrder(ctx context.Context, arg CreateOrderParams) (Order, error) {
+	row := q.db.QueryRow(ctx, createOrder,
+		arg.TenantID,
+		arg.RestaurantID,
+		arg.TableID,
+		arg.CustomerID,
+		arg.OrderType,
+		arg.Status,
+		arg.PaymentStatus,
+		arg.Subtotal,
+		arg.TaxAmount,
+		arg.DiscountAmount,
+		arg.ServiceFee,
+		arg.TotalAmount,
+		arg.Currency,
+		arg.CustomerName,
+		arg.CustomerPhone,
+		arg.Notes,
+	)
+	var i Order
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.RestaurantID,
+		&i.TableID,
+		&i.CustomerID,
+		&i.OrderNumber,
+		&i.OrderType,
+		&i.Status,
+		&i.PaymentStatus,
+		&i.Subtotal,
+		&i.TaxAmount,
+		&i.DiscountAmount,
+		&i.ServiceFee,
+		&i.TotalAmount,
+		&i.Currency,
+		&i.CustomerName,
+		&i.CustomerPhone,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CompletedAt,
+		&i.CancelledAt,
+	)
+	return i, err
+}
+
 const getOrderByID = `-- name: GetOrderByID :one
 SELECT
     id,
     tenant_id,
     restaurant_id,
+    table_id,
     customer_id,
+    order_number,
+    order_type,
     status,
+    payment_status,
+    subtotal,
+    tax_amount,
+    discount_amount,
+    service_fee,
     total_amount,
     currency,
+    customer_name,
+    customer_phone,
+    notes,
     created_at,
-    updated_at
+    updated_at,
+    completed_at,
+    cancelled_at
 FROM orders
 WHERE tenant_id = $1
   AND id = $2
@@ -32,31 +309,255 @@ type GetOrderByIDParams struct {
 	ID       pgtype.UUID `json:"id"`
 }
 
-type GetOrderByIDRow struct {
-	ID           pgtype.UUID        `json:"id"`
-	TenantID     pgtype.UUID        `json:"tenant_id"`
-	RestaurantID pgtype.UUID        `json:"restaurant_id"`
-	CustomerID   pgtype.UUID        `json:"customer_id"`
-	Status       OrderStatus        `json:"status"`
-	TotalAmount  pgtype.Numeric     `json:"total_amount"`
-	Currency     string             `json:"currency"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
-}
-
-func (q *Queries) GetOrderByID(ctx context.Context, arg GetOrderByIDParams) (GetOrderByIDRow, error) {
+func (q *Queries) GetOrderByID(ctx context.Context, arg GetOrderByIDParams) (Order, error) {
 	row := q.db.QueryRow(ctx, getOrderByID, arg.TenantID, arg.ID)
-	var i GetOrderByIDRow
+	var i Order
 	err := row.Scan(
 		&i.ID,
 		&i.TenantID,
 		&i.RestaurantID,
+		&i.TableID,
 		&i.CustomerID,
+		&i.OrderNumber,
+		&i.OrderType,
 		&i.Status,
+		&i.PaymentStatus,
+		&i.Subtotal,
+		&i.TaxAmount,
+		&i.DiscountAmount,
+		&i.ServiceFee,
 		&i.TotalAmount,
 		&i.Currency,
+		&i.CustomerName,
+		&i.CustomerPhone,
+		&i.Notes,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CompletedAt,
+		&i.CancelledAt,
+	)
+	return i, err
+}
+
+const listOrders = `-- name: ListOrders :many
+SELECT
+    id,
+    tenant_id,
+    restaurant_id,
+    table_id,
+    customer_id,
+    order_number,
+    order_type,
+    status,
+    payment_status,
+    subtotal,
+    tax_amount,
+    discount_amount,
+    service_fee,
+    total_amount,
+    currency,
+    customer_name,
+    customer_phone,
+    notes,
+    created_at,
+    updated_at,
+    completed_at,
+    cancelled_at
+FROM orders
+WHERE tenant_id = $1
+  AND restaurant_id = $2
+ORDER BY created_at DESC
+LIMIT $3
+OFFSET $4
+`
+
+type ListOrdersParams struct {
+	TenantID     pgtype.UUID `json:"tenant_id"`
+	RestaurantID pgtype.UUID `json:"restaurant_id"`
+	Limit        int32       `json:"limit"`
+	Offset       int32       `json:"offset"`
+}
+
+func (q *Queries) ListOrders(ctx context.Context, arg ListOrdersParams) ([]Order, error) {
+	rows, err := q.db.Query(ctx, listOrders,
+		arg.TenantID,
+		arg.RestaurantID,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Order
+	for rows.Next() {
+		var i Order
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.RestaurantID,
+			&i.TableID,
+			&i.CustomerID,
+			&i.OrderNumber,
+			&i.OrderType,
+			&i.Status,
+			&i.PaymentStatus,
+			&i.Subtotal,
+			&i.TaxAmount,
+			&i.DiscountAmount,
+			&i.ServiceFee,
+			&i.TotalAmount,
+			&i.Currency,
+			&i.CustomerName,
+			&i.CustomerPhone,
+			&i.Notes,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.CompletedAt,
+			&i.CancelledAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const updateOrderPaymentStatus = `-- name: UpdateOrderPaymentStatus :one
+UPDATE orders
+SET
+    payment_status = $3,
+    updated_at = NOW()
+WHERE tenant_id = $1
+  AND id = $2
+RETURNING
+    id,
+    tenant_id,
+    restaurant_id,
+    table_id,
+    customer_id,
+    order_number,
+    order_type,
+    status,
+    payment_status,
+    subtotal,
+    tax_amount,
+    discount_amount,
+    service_fee,
+    total_amount,
+    currency,
+    customer_name,
+    customer_phone,
+    notes,
+    created_at,
+    updated_at,
+    completed_at,
+    cancelled_at
+`
+
+type UpdateOrderPaymentStatusParams struct {
+	TenantID      pgtype.UUID   `json:"tenant_id"`
+	ID            pgtype.UUID   `json:"id"`
+	PaymentStatus PaymentStatus `json:"payment_status"`
+}
+
+func (q *Queries) UpdateOrderPaymentStatus(ctx context.Context, arg UpdateOrderPaymentStatusParams) (Order, error) {
+	row := q.db.QueryRow(ctx, updateOrderPaymentStatus, arg.TenantID, arg.ID, arg.PaymentStatus)
+	var i Order
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.RestaurantID,
+		&i.TableID,
+		&i.CustomerID,
+		&i.OrderNumber,
+		&i.OrderType,
+		&i.Status,
+		&i.PaymentStatus,
+		&i.Subtotal,
+		&i.TaxAmount,
+		&i.DiscountAmount,
+		&i.ServiceFee,
+		&i.TotalAmount,
+		&i.Currency,
+		&i.CustomerName,
+		&i.CustomerPhone,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CompletedAt,
+		&i.CancelledAt,
+	)
+	return i, err
+}
+
+const updateOrderStatus = `-- name: UpdateOrderStatus :one
+UPDATE orders
+SET
+    status = $3,
+    updated_at = NOW()
+WHERE tenant_id = $1
+  AND id = $2
+RETURNING
+    id,
+    tenant_id,
+    restaurant_id,
+    table_id,
+    customer_id,
+    order_number,
+    order_type,
+    status,
+    payment_status,
+    subtotal,
+    tax_amount,
+    discount_amount,
+    service_fee,
+    total_amount,
+    currency,
+    customer_name,
+    customer_phone,
+    notes,
+    created_at,
+    updated_at,
+    completed_at,
+    cancelled_at
+`
+
+type UpdateOrderStatusParams struct {
+	TenantID pgtype.UUID `json:"tenant_id"`
+	ID       pgtype.UUID `json:"id"`
+	Status   OrderStatus `json:"status"`
+}
+
+func (q *Queries) UpdateOrderStatus(ctx context.Context, arg UpdateOrderStatusParams) (Order, error) {
+	row := q.db.QueryRow(ctx, updateOrderStatus, arg.TenantID, arg.ID, arg.Status)
+	var i Order
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.RestaurantID,
+		&i.TableID,
+		&i.CustomerID,
+		&i.OrderNumber,
+		&i.OrderType,
+		&i.Status,
+		&i.PaymentStatus,
+		&i.Subtotal,
+		&i.TaxAmount,
+		&i.DiscountAmount,
+		&i.ServiceFee,
+		&i.TotalAmount,
+		&i.Currency,
+		&i.CustomerName,
+		&i.CustomerPhone,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CompletedAt,
+		&i.CancelledAt,
 	)
 	return i, err
 }
