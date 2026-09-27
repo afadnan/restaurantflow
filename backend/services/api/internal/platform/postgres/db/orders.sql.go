@@ -149,6 +149,7 @@ func (q *Queries) CompleteOrder(ctx context.Context, arg CompleteOrderParams) (O
 
 const createOrder = `-- name: CreateOrder :one
 INSERT INTO orders (
+    id,
     tenant_id,
     restaurant_id,
     table_id,
@@ -182,7 +183,8 @@ VALUES (
     $13,
     $14,
     $15,
-    $16
+    $16,
+    $17
 )
 RETURNING
     id,
@@ -210,6 +212,7 @@ RETURNING
 `
 
 type CreateOrderParams struct {
+	ID             pgtype.UUID    `json:"id"`
 	TenantID       pgtype.UUID    `json:"tenant_id"`
 	RestaurantID   pgtype.UUID    `json:"restaurant_id"`
 	TableID        pgtype.UUID    `json:"table_id"`
@@ -230,6 +233,7 @@ type CreateOrderParams struct {
 
 func (q *Queries) CreateOrder(ctx context.Context, arg CreateOrderParams) (Order, error) {
 	row := q.db.QueryRow(ctx, createOrder,
+		arg.ID,
 		arg.TenantID,
 		arg.RestaurantID,
 		arg.TableID,

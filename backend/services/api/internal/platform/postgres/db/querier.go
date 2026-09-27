@@ -15,6 +15,7 @@ type Querier interface {
 	CreateKDSTicket(ctx context.Context, arg CreateKDSTicketParams) (KdsTicket, error)
 	CreateOrder(ctx context.Context, arg CreateOrderParams) (Order, error)
 	CreateOrderItem(ctx context.Context, arg CreateOrderItemParams) (OrderItem, error)
+	CreateOutboxEvent(ctx context.Context, arg CreateOutboxEventParams) error
 	DeductInventoryForOrder(ctx context.Context, arg DeductInventoryForOrderParams) (int64, error)
 	GetKDSTicketByID(ctx context.Context, arg GetKDSTicketByIDParams) (KdsTicket, error)
 	GetKDSTicketByOrderID(ctx context.Context, arg GetKDSTicketByOrderIDParams) (KdsTicket, error)

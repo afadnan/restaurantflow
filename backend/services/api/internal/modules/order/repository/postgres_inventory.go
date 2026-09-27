@@ -4,11 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
-	"strconv"
-	"strings"
+	"math/big"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/afadnan/restaurantflow/services/api/internal/modules/order/domain"
 	"github.com/afadnan/restaurantflow/services/api/internal/platform/postgres/db"
@@ -128,96 +127,88 @@ func (r *PostgresInventoryRepository) DeductIngredientsForOrder(
 	return nil
 }
 
-// numericToThousandths converts a PostgreSQL numeric quantity into
-// an integer representation with three decimal places.
+// numericToThousandths converts a PostgreSQL NUMERIC quantity into
+// an exact integer representation with three decimal places.
 //
-// Example:
+// PostgreSQL inventory quantities use NUMERIC(14,3), so:
 //
 //	1      -> 1000
 //	1.25   -> 1250
 //	0.005  -> 5
 //
-// PostgreSQL numeric values are returned by pgx as a string-compatible
-// value, so this function deliberately parses the textual representation
-// rather than going through float64.
-func numericToThousandths(value any) (int64, error) {
-	s := strings.TrimSpace(fmt.Sprint(value))
-	if s == "" {
-		return 0, errors.New("empty numeric quantity")
-	}
-
-	negative := false
-
-	if strings.HasPrefix(s, "-") {
-		negative = true
-		s = s[1:]
-	} else if strings.HasPrefix(s, "+") {
-		s = s[1:]
-	}
-
-	if s == "" {
+// The conversion is performed using math/big rather than float64 so
+// that inventory quantities remain exact.
+func numericToThousandths(value pgtype.Numeric) (int64, error) {
+	if !value.Valid {
 		return 0, errors.New("invalid numeric quantity")
 	}
 
-	parts := strings.SplitN(s, ".", 2)
-
-	whole, err := strconv.ParseInt(parts[0], 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("invalid whole quantity %q: %w", value, err)
+	if value.NaN {
+		return 0, errors.New("numeric quantity is NaN")
 	}
 
-	var fractional int64
+	if value.InfinityModifier != pgtype.Finite {
+		return 0, errors.New("numeric quantity is infinite")
+	}
 
-	if len(parts) == 2 {
-		fraction := parts[1]
+	if value.Int == nil {
+		return 0, errors.New("numeric quantity has no integer value")
+	}
 
-		if len(fraction) > 3 {
-			// Inventory quantities are represented at thousandth
-			// precision. Reject values that cannot be represented
-			// exactly instead of silently rounding.
-			if strings.TrimRight(fraction[3:], "0") != "" {
-				return 0, fmt.Errorf(
-					"quantity %q has more than three decimal places",
-					value,
-				)
-			}
+	// PostgreSQL NUMERIC represents:
+	//
+	//     value = Int * 10^Exp
+	//
+	// We need:
+	//
+	//     thousandths = value * 1000
+	//
+	// Therefore:
+	//
+	//     thousandths = Int * 10^(Exp + 3)
+	//
+	result := new(big.Int).Set(value.Int)
+	scale := int(value.Exp) + 3
 
-			fraction = fraction[:3]
+	if scale > 0 {
+		multiplier := new(big.Int).Exp(
+			big.NewInt(10),
+			big.NewInt(int64(scale)),
+			nil,
+		)
+		result.Mul(result, multiplier)
+	} else if scale < 0 {
+		divisor := new(big.Int).Exp(
+			big.NewInt(10),
+			big.NewInt(int64(-scale)),
+			nil,
+		)
+
+		quotient := new(big.Int)
+		remainder := new(big.Int)
+
+		quotient.QuoRem(result, divisor, remainder)
+
+		// Inventory quantities must be exactly representable at
+		// thousandth precision. Do not silently round.
+		if remainder.Sign() != 0 {
+			return 0, fmt.Errorf(
+				"numeric quantity %v has more than three decimal places",
+				value,
+			)
 		}
 
-		for len(fraction) < 3 {
-			fraction += "0"
-		}
-
-		if fraction != "" {
-			fractional, err = strconv.ParseInt(fraction, 10, 64)
-			if err != nil {
-				return 0, fmt.Errorf(
-					"invalid fractional quantity %q: %w",
-					value,
-					err,
-				)
-			}
-		}
+		result = quotient
 	}
 
-	if whole > math.MaxInt64/1000 {
-		return 0, fmt.Errorf("quantity %q overflows int64", value)
+	if !result.IsInt64() {
+		return 0, fmt.Errorf(
+			"numeric quantity %v overflows int64",
+			value,
+		)
 	}
 
-	result := whole * 1000
-
-	if result > math.MaxInt64-fractional {
-		return 0, fmt.Errorf("quantity %q overflows int64", value)
-	}
-
-	result += fractional
-
-	if negative {
-		return -result, nil
-	}
-
-	return result, nil
+	return result.Int64(), nil
 }
 
 func formatThousandths(value int64) string {

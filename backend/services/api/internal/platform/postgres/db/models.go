@@ -620,6 +620,19 @@ type OrderItemAddon struct {
 	Subtotal    pgtype.Numeric `json:"subtotal"`
 }
 
+type OutboxEvent struct {
+	ID          pgtype.UUID        `json:"id"`
+	TenantID    pgtype.UUID        `json:"tenant_id"`
+	AggregateID pgtype.UUID        `json:"aggregate_id"`
+	EventType   string             `json:"event_type"`
+	Payload     []byte             `json:"payload"`
+	OccurredAt  pgtype.Timestamptz `json:"occurred_at"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	PublishedAt pgtype.Timestamptz `json:"published_at"`
+	Attempts    int32              `json:"attempts"`
+	LastError   pgtype.Text        `json:"last_error"`
+}
+
 type Restaurant struct {
 	ID           pgtype.UUID        `json:"id"`
 	TenantID     pgtype.UUID        `json:"tenant_id"`

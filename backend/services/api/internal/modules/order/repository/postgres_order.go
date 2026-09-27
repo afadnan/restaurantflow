@@ -37,7 +37,12 @@ func (r *PostgresOrderRepository) Create(
 
 	q := db.New(pgTx.Raw())
 
+	// The domain aggregate owns the order ID.
+	// PostgreSQL must persist exactly this ID so that all related
+	// records (order items, KDS, outbox events) reference the same
+	// aggregate ID.
 	orderRow, err := q.CreateOrder(ctx, db.CreateOrderParams{
+		ID:             uuidToPgUUID(order.ID.UUID()),
 		TenantID:       uuidToPgUUID(order.TenantID.UUID()),
 		RestaurantID:   uuidToPgUUID(order.RestaurantID.UUID()),
 		TableID:        optionalUUIDToPgUUID(order.TableID),
@@ -59,20 +64,20 @@ func (r *PostgresOrderRepository) Create(
 		return fmt.Errorf("create order: %w", err)
 	}
 
-	// PostgreSQL generates the order UUID when the INSERT does not
-	// explicitly provide one. Reconstruct the domain OrderID through
-	// its constructor so domain invariants remain enforced.
-	orderUUID, err := pgUUIDToUUID(orderRow.ID)
+	// Verify that PostgreSQL returned the same aggregate ID that
+	// the domain generated before persistence.
+	persistedOrderID, err := pgUUIDToUUID(orderRow.ID)
 	if err != nil {
 		return fmt.Errorf("created order id: %w", err)
 	}
 
-	orderID, err := domain.NewOrderIDFromUUID(orderUUID)
-	if err != nil {
-		return fmt.Errorf("created order id: %w", err)
+	if persistedOrderID != order.ID.UUID() {
+		return fmt.Errorf(
+			"created order id mismatch: expected %s, got %s",
+			order.ID.UUID(),
+			persistedOrderID,
+		)
 	}
-
-	order.ID = orderID
 
 	if orderRow.OrderNumber.Valid {
 		order.OrderNumber = orderRow.OrderNumber.Int64
@@ -86,6 +91,7 @@ func (r *PostgresOrderRepository) Create(
 		order.UpdatedAt = orderRow.UpdatedAt.Time
 	}
 
+	// Persist all order items using the same domain-owned order ID.
 	for _, item := range order.Items {
 		_, err := q.CreateOrderItem(ctx, db.CreateOrderItemParams{
 			TenantID:   uuidToPgUUID(order.TenantID.UUID()),
