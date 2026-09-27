@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"encoding/json"
 	"strings"
 
 	"github.com/google/uuid"
@@ -8,6 +9,14 @@ import (
 
 type TenantID struct {
 	value uuid.UUID
+}
+
+func marshalUUID(id uuid.UUID) ([]byte, error) {
+	return json.Marshal(id.String())
+}
+
+func (id TenantID) MarshalJSON() ([]byte, error) {
+	return marshalUUID(id.value)
 }
 
 func NewTenantID(id uuid.UUID) (TenantID, error) {
@@ -26,6 +35,10 @@ type RestaurantID struct {
 	value uuid.UUID
 }
 
+func (id RestaurantID) MarshalJSON() ([]byte, error) {
+	return marshalUUID(id.value)
+}
+
 func NewRestaurantID(id uuid.UUID) (RestaurantID, error) {
 	if id == uuid.Nil {
 		return RestaurantID{}, ErrInvalidRestaurantID
@@ -42,6 +55,10 @@ type TableID struct {
 	value uuid.UUID
 }
 
+func (id TableID) MarshalJSON() ([]byte, error) {
+	return marshalUUID(id.value)
+}
+
 func NewTableID(id uuid.UUID) (TableID, error) {
 	if id == uuid.Nil {
 		return TableID{}, ErrInvalidTableID
@@ -56,6 +73,10 @@ func (id TableID) UUID() uuid.UUID {
 
 type OrderID struct {
 	value uuid.UUID
+}
+
+func (id OrderID) MarshalJSON() ([]byte, error) {
+	return marshalUUID(id.value)
 }
 
 func NewOrderID() OrderID {
@@ -80,6 +101,10 @@ type CustomerID struct {
 	value uuid.UUID
 }
 
+func (id CustomerID) MarshalJSON() ([]byte, error) {
+	return marshalUUID(id.value)
+}
+
 func NewCustomerID(id uuid.UUID) (CustomerID, error) {
 	if id == uuid.Nil {
 		return CustomerID{}, ErrInvalidCustomerID
@@ -94,6 +119,10 @@ func (id CustomerID) UUID() uuid.UUID {
 
 type ProductID struct {
 	value uuid.UUID
+}
+
+func (id ProductID) MarshalJSON() ([]byte, error) {
+	return marshalUUID(id.value)
 }
 
 func NewProductID(id uuid.UUID) (ProductID, error) {
