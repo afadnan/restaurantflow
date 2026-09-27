@@ -28,9 +28,23 @@ func NewOrderHandler(
 }
 
 type createOrderRequest struct {
-	CustomerID uuid.UUID              `json:"customer_id"`
-	Currency   string                 `json:"currency"`
-	Items      []createOrderItemInput `json:"items"`
+	RestaurantID uuid.UUID  `json:"restaurant_id"`
+	TableID      *uuid.UUID `json:"table_id"`
+	CustomerID   *uuid.UUID `json:"customer_id"`
+
+	OrderType     domain.OrderType     `json:"order_type"`
+	PaymentStatus domain.PaymentStatus `json:"payment_status"`
+
+	Currency       string `json:"currency"`
+	TaxAmount      int64  `json:"tax_amount"`
+	DiscountAmount int64  `json:"discount_amount"`
+	ServiceFee     int64  `json:"service_fee"`
+
+	CustomerName  string `json:"customer_name"`
+	CustomerPhone string `json:"customer_phone"`
+	Notes         string `json:"notes"`
+
+	Items []createOrderItemInput `json:"items"`
 }
 
 type createOrderItemInput struct {
@@ -38,6 +52,7 @@ type createOrderItemInput struct {
 	Name      string    `json:"name"`
 	Quantity  int32     `json:"quantity"`
 	UnitPrice int64     `json:"unit_price"`
+	Notes     string    `json:"notes"`
 }
 
 func (h *OrderHandler) CreateOrder(
@@ -68,6 +83,15 @@ func (h *OrderHandler) CreateOrder(
 		return
 	}
 
+	if request.RestaurantID == uuid.Nil {
+		http.Error(
+			w,
+			"restaurant_id is required",
+			http.StatusBadRequest,
+		)
+		return
+	}
+
 	items := make(
 		[]usecase.CreateOrderItemInput,
 		0,
@@ -82,24 +106,28 @@ func (h *OrderHandler) CreateOrder(
 				Name:      item.Name,
 				Quantity:  item.Quantity,
 				UnitPrice: item.UnitPrice,
+				Notes:     item.Notes,
 			},
 		)
-	}
-
-	var customerID *uuid.UUID
-
-	if request.CustomerID != uuid.Nil {
-		id := request.CustomerID
-		customerID = &id
 	}
 
 	order, err := h.CreateOrderUseCase.Execute(
 		r.Context(),
 		usecase.CreateOrderInput{
-			TenantID:   tenantID,
-			CustomerID: customerID,
-			Currency:   request.Currency,
-			Items:      items,
+			TenantID:       tenantID,
+			RestaurantID:   request.RestaurantID,
+			TableID:        request.TableID,
+			CustomerID:     request.CustomerID,
+			OrderType:      request.OrderType,
+			PaymentStatus:  request.PaymentStatus,
+			Currency:       request.Currency,
+			TaxAmount:      request.TaxAmount,
+			DiscountAmount: request.DiscountAmount,
+			ServiceFee:     request.ServiceFee,
+			CustomerName:   request.CustomerName,
+			CustomerPhone:  request.CustomerPhone,
+			Notes:          request.Notes,
+			Items:          items,
 		},
 	)
 	if err != nil {
@@ -187,6 +215,7 @@ func writeDomainError(
 		)
 
 	case errors.Is(err, domain.ErrInvalidOrderID),
+		errors.Is(err, domain.ErrInvalidRestaurantID),
 		errors.Is(err, domain.ErrInvalidOrderItems),
 		errors.Is(err, domain.ErrInvalidQuantity),
 		errors.Is(err, domain.ErrInvalidPrice),

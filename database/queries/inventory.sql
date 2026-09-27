@@ -1,0 +1,80 @@
+-- name: CheckInventoryForOrder :many
+WITH required AS (
+    SELECT
+        mi.tenant_id,
+        mi.restaurant_id,
+        mii.ingredient_id,
+        SUM(
+            mii.quantity_required * oi.quantity::NUMERIC
+        )::NUMERIC  AS required_quantity
+    FROM order_items oi
+    INNER JOIN menu_items mi
+        ON mi.id = oi.menu_item_id
+       AND mi.tenant_id = oi.tenant_id
+    INNER JOIN menu_item_ingredients mii
+        ON mii.menu_item_id = mi.id
+       AND mii.tenant_id = oi.tenant_id
+    WHERE oi.tenant_id = $1
+      AND oi.order_id = $2
+    GROUP BY
+        mi.tenant_id,
+        mi.restaurant_id,
+        mii.ingredient_id
+),
+locked_inventory AS MATERIALIZED (
+    SELECT
+        i.tenant_id,
+        i.restaurant_id,
+        i.ingredient_id,
+        i.quantity
+    FROM inventory i
+    INNER JOIN required r
+        ON i.tenant_id = r.tenant_id
+       AND i.restaurant_id = r.restaurant_id
+       AND i.ingredient_id = r.ingredient_id
+    FOR UPDATE
+)
+SELECT
+    r.ingredient_id,
+    r.required_quantity,
+    COALESCE(li.quantity, 0) AS available_quantity
+FROM required r
+LEFT JOIN locked_inventory li
+    ON li.tenant_id = r.tenant_id
+   AND li.restaurant_id = r.restaurant_id
+   AND li.ingredient_id = r.ingredient_id
+ORDER BY r.ingredient_id;
+
+
+-- name: DeductInventoryForOrder :execrows
+WITH required AS (
+    SELECT
+        mi.tenant_id,
+        mi.restaurant_id,
+        mii.ingredient_id,
+        SUM(
+            mii.quantity_required * oi.quantity::NUMERIC
+        )::NUMERIC  AS required_quantity
+    FROM order_items oi
+    INNER JOIN menu_items mi
+        ON mi.id = oi.menu_item_id
+       AND mi.tenant_id = oi.tenant_id
+    INNER JOIN menu_item_ingredients mii
+        ON mii.menu_item_id = mi.id
+       AND mii.tenant_id = oi.tenant_id
+    WHERE oi.tenant_id = $1
+      AND oi.order_id = $2
+    GROUP BY
+        mi.tenant_id,
+        mi.restaurant_id,
+        mii.ingredient_id
+)
+UPDATE inventory i
+SET
+    quantity = i.quantity - r.required_quantity,
+    updated_at = NOW()
+FROM required r
+WHERE i.tenant_id = r.tenant_id
+  AND i.restaurant_id = r.restaurant_id
+  AND i.ingredient_id = r.ingredient_id
+  AND i.quantity >= r.required_quantity;

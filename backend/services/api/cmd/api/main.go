@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -13,7 +14,13 @@ import (
 	"time"
 
 	"github.com/afadnan/restaurantflow/services/api/internal/config"
+	httpdelivery "github.com/afadnan/restaurantflow/services/api/internal/modules/order/delivery/http"
+	"github.com/afadnan/restaurantflow/services/api/internal/modules/order/repository"
+	"github.com/afadnan/restaurantflow/services/api/internal/modules/order/usecase"
 	"github.com/afadnan/restaurantflow/services/api/internal/platform/database"
+	"github.com/afadnan/restaurantflow/services/api/internal/platform/events"
+	"github.com/afadnan/restaurantflow/services/api/internal/platform/postgres"
+	redisplatform "github.com/afadnan/restaurantflow/services/api/internal/platform/redis"
 )
 
 func main() {
@@ -36,11 +43,21 @@ func run() error {
 	)
 	defer stop()
 
+	logger := slog.New(
+		slog.NewTextHandler(os.Stdout, nil),
+	)
+
+	// -------------------------------------------------------------------------
+	// PostgreSQL
+	// -------------------------------------------------------------------------
+
 	pool, err := database.NewPostgresPool(ctx, cfg.Database)
 	if err != nil {
 		return fmt.Errorf("initialize postgres: %w", err)
 	}
 	defer pool.Close()
+
+	db := postgres.NewDB(pool)
 
 	log.Printf(
 		"postgres connected: host=%s port=%d database=%s",
@@ -49,7 +66,86 @@ func run() error {
 		cfg.Database.Name,
 	)
 
+	// -------------------------------------------------------------------------
+	// Redis
+	// -------------------------------------------------------------------------
+
+	redisClient := redisplatform.NewClient(
+		fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port),
+		"",
+		0,
+	)
+	defer func() {
+		if err := redisClient.Close(); err != nil {
+			logger.Error("redis close failed", "error", err)
+		}
+	}()
+
+	if err := redisClient.Ping(ctx).Err(); err != nil {
+		return fmt.Errorf("initialize redis: %w", err)
+	}
+
+	log.Printf(
+		"redis connected: host=%s port=%d",
+		cfg.Redis.Host,
+		cfg.Redis.Port,
+	)
+
+	redisPublisher := redisplatform.NewPublisher(
+		redisClient,
+		logger,
+	)
+
+	// -------------------------------------------------------------------------
+	// Order repositories
+	// -------------------------------------------------------------------------
+
+	orderRepository := repository.NewPostgresOrderRepository()
+	kdsRepository := repository.NewPostgresKDSRepository()
+	inventoryRepository := repository.NewPostgresInventoryRepository()
+	eventRepository := events.NewPostgresEventRepository()
+
+	// -------------------------------------------------------------------------
+	// Order use cases
+	// -------------------------------------------------------------------------
+
+	createOrderUseCase := &usecase.CreateOrderUseCase{
+		DB:        db,
+		Orders:    orderRepository,
+		KDS:       kdsRepository,
+		Inventory: inventoryRepository,
+		Events:    eventRepository,
+		Clock:     time.Now,
+	}
+
+	updateKDSStateUseCase := usecase.NewUpdateKDSStateUseCase(
+		db,
+		kdsRepository,
+		orderRepository,
+		eventRepository,
+		redisPublisher,
+	)
+
+	// -------------------------------------------------------------------------
+	// HTTP handlers
+	// -------------------------------------------------------------------------
+
+	orderHandler := httpdelivery.NewOrderHandler(
+		createOrderUseCase,
+		updateKDSStateUseCase,
+	)
+
+	// -------------------------------------------------------------------------
+	// HTTP routes
+	// -------------------------------------------------------------------------
+
 	mux := http.NewServeMux()
+
+	httpdelivery.RegisterRoutes(
+		mux,
+		orderHandler,
+		nil,
+	)
 
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -59,7 +155,20 @@ func run() error {
 
 	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
 		if err := pool.Ping(r.Context()); err != nil {
-			http.Error(w, `{"status":"not_ready"}`, http.StatusServiceUnavailable)
+			http.Error(
+				w,
+				`{"status":"not_ready"}`,
+				http.StatusServiceUnavailable,
+			)
+			return
+		}
+
+		if err := redisClient.Ping(r.Context()).Err(); err != nil {
+			http.Error(
+				w,
+				`{"status":"not_ready"}`,
+				http.StatusServiceUnavailable,
+			)
 			return
 		}
 
@@ -67,6 +176,10 @@ func run() error {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"ready"}`))
 	})
+
+	// -------------------------------------------------------------------------
+	// HTTP server
+	// -------------------------------------------------------------------------
 
 	server := &http.Server{
 		Addr:              ":" + strconv.Itoa(cfg.HTTPPort),
