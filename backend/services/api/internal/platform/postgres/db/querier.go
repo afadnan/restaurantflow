@@ -11,6 +11,7 @@ import (
 type Querier interface {
 	CancelOrder(ctx context.Context, arg CancelOrderParams) (Order, error)
 	CheckInventoryForOrder(ctx context.Context, arg CheckInventoryForOrderParams) ([]CheckInventoryForOrderRow, error)
+	ClaimOutboxEvents(ctx context.Context, arg ClaimOutboxEventsParams) ([]ClaimOutboxEventsRow, error)
 	CompleteOrder(ctx context.Context, arg CompleteOrderParams) (Order, error)
 	CreateKDSTicket(ctx context.Context, arg CreateKDSTicketParams) (KdsTicket, error)
 	CreateOrder(ctx context.Context, arg CreateOrderParams) (Order, error)
@@ -24,6 +25,8 @@ type Querier interface {
 	ListKDSQueue(ctx context.Context, arg ListKDSQueueParams) ([]KdsTicket, error)
 	ListOrderItems(ctx context.Context, arg ListOrderItemsParams) ([]OrderItem, error)
 	ListOrders(ctx context.Context, arg ListOrdersParams) ([]Order, error)
+	MarkOutboxEventFailed(ctx context.Context, arg MarkOutboxEventFailedParams) error
+	MarkOutboxEventPublished(ctx context.Context, arg MarkOutboxEventPublishedParams) error
 	UpdateKDSStatus(ctx context.Context, arg UpdateKDSStatusParams) (KdsTicket, error)
 	UpdateOrderPaymentStatus(ctx context.Context, arg UpdateOrderPaymentStatusParams) (Order, error)
 	UpdateOrderStatus(ctx context.Context, arg UpdateOrderStatusParams) (Order, error)

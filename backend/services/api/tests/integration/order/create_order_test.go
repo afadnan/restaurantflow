@@ -265,6 +265,84 @@ func newCreateOrderUseCase(
 	}
 }
 
+type failingEventRepository struct {
+	err error
+}
+
+func (r failingEventRepository) Append(
+	ctx context.Context,
+	tx orderdomain.Transaction,
+	event orderdomain.DomainEvent,
+) error {
+	return r.err
+}
+
+func TestCreateOrder_RollsBackOnEventFailure(t *testing.T) {
+	db := newIntegrationDB(t)
+
+	fixture := createFixture(
+		t,
+		db,
+		"2.000",
+		"0.500",
+	)
+
+	expectedErr := fmt.Errorf("forced outbox append failure")
+
+	uc := newCreateOrderUseCase(db)
+
+	// Replace the real event repository with one that fails
+	// after Orders.Create, KDS.Create, and inventory deduction
+	// have already succeeded inside the transaction.
+	uc.Events = failingEventRepository{
+		err: expectedErr,
+	}
+
+	_, err := uc.Execute(
+		context.Background(),
+		createOrderInput(fixture, 1),
+	)
+
+	require.ErrorIs(t, err, expectedErr)
+
+	// The order was inserted before the forced event failure.
+	// It must have been rolled back.
+	require.Equal(
+		t,
+		0,
+		countForTenant(t, db, fixture.TenantID, "orders"),
+	)
+
+	// The order item was inserted in the same transaction.
+	require.Equal(
+		t,
+		0,
+		countForTenant(t, db, fixture.TenantID, "order_items"),
+	)
+
+	// The KDS ticket was inserted in the same transaction.
+	require.Equal(
+		t,
+		0,
+		countForTenant(t, db, fixture.TenantID, "kds_tickets"),
+	)
+
+	// The outbox event must not exist because Append failed.
+	require.Equal(
+		t,
+		0,
+		countForTenant(t, db, fixture.TenantID, "outbox_events"),
+	)
+
+	// Inventory deduction happened before the forced event failure,
+	// so it must also have been rolled back.
+	require.Equal(
+		t,
+		"2.000",
+		readInventoryQuantity(t, db, fixture),
+	)
+}
+
 func createOrderInput(
 	f orderFixture,
 	quantity int32,

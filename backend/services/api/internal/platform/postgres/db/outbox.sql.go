@@ -11,6 +11,89 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const claimOutboxEvents = `-- name: ClaimOutboxEvents :many
+
+WITH candidates AS (
+    SELECT id
+    FROM outbox_events
+    WHERE published_at IS NULL
+      AND (
+          claimed_at IS NULL
+          OR claimed_at < NOW() - ($2 * INTERVAL '1 second')
+      )
+    ORDER BY created_at, id
+    FOR UPDATE SKIP LOCKED
+    LIMIT $1
+)
+UPDATE outbox_events AS e
+SET
+    claimed_at = NOW(),
+    claim_token = $3
+FROM candidates
+WHERE e.id = candidates.id
+RETURNING
+    e.id,
+    e.tenant_id,
+    e.aggregate_id,
+    e.event_type,
+    e.payload,
+    e.occurred_at,
+    e.created_at,
+    e.published_at,
+    e.attempts,
+    e.last_error
+`
+
+type ClaimOutboxEventsParams struct {
+	Limit      int32       `json:"limit"`
+	Column2    interface{} `json:"column_2"`
+	ClaimToken pgtype.UUID `json:"claim_token"`
+}
+
+type ClaimOutboxEventsRow struct {
+	ID          pgtype.UUID        `json:"id"`
+	TenantID    pgtype.UUID        `json:"tenant_id"`
+	AggregateID pgtype.UUID        `json:"aggregate_id"`
+	EventType   string             `json:"event_type"`
+	Payload     []byte             `json:"payload"`
+	OccurredAt  pgtype.Timestamptz `json:"occurred_at"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	PublishedAt pgtype.Timestamptz `json:"published_at"`
+	Attempts    int32              `json:"attempts"`
+	LastError   pgtype.Text        `json:"last_error"`
+}
+
+func (q *Queries) ClaimOutboxEvents(ctx context.Context, arg ClaimOutboxEventsParams) ([]ClaimOutboxEventsRow, error) {
+	rows, err := q.db.Query(ctx, claimOutboxEvents, arg.Limit, arg.Column2, arg.ClaimToken)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ClaimOutboxEventsRow
+	for rows.Next() {
+		var i ClaimOutboxEventsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.AggregateID,
+			&i.EventType,
+			&i.Payload,
+			&i.OccurredAt,
+			&i.CreatedAt,
+			&i.PublishedAt,
+			&i.Attempts,
+			&i.LastError,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const createOutboxEvent = `-- name: CreateOutboxEvent :exec
 
 INSERT INTO outbox_events (
@@ -49,5 +132,52 @@ func (q *Queries) CreateOutboxEvent(ctx context.Context, arg CreateOutboxEventPa
 		arg.Payload,
 		arg.OccurredAt,
 	)
+	return err
+}
+
+const markOutboxEventFailed = `-- name: MarkOutboxEventFailed :exec
+
+UPDATE outbox_events
+SET
+    attempts = attempts + 1,
+    last_error = $3,
+    claimed_at = NULL,
+    claim_token = NULL
+WHERE id = $1
+  AND claim_token = $2
+  AND published_at IS NULL
+`
+
+type MarkOutboxEventFailedParams struct {
+	ID         pgtype.UUID `json:"id"`
+	ClaimToken pgtype.UUID `json:"claim_token"`
+	LastError  pgtype.Text `json:"last_error"`
+}
+
+func (q *Queries) MarkOutboxEventFailed(ctx context.Context, arg MarkOutboxEventFailedParams) error {
+	_, err := q.db.Exec(ctx, markOutboxEventFailed, arg.ID, arg.ClaimToken, arg.LastError)
+	return err
+}
+
+const markOutboxEventPublished = `-- name: MarkOutboxEventPublished :exec
+
+UPDATE outbox_events
+SET
+    published_at = NOW(),
+    claimed_at = NULL,
+    claim_token = NULL,
+    last_error = NULL
+WHERE id = $1
+  AND claim_token = $2
+  AND published_at IS NULL
+`
+
+type MarkOutboxEventPublishedParams struct {
+	ID         pgtype.UUID `json:"id"`
+	ClaimToken pgtype.UUID `json:"claim_token"`
+}
+
+func (q *Queries) MarkOutboxEventPublished(ctx context.Context, arg MarkOutboxEventPublishedParams) error {
+	_, err := q.db.Exec(ctx, markOutboxEventPublished, arg.ID, arg.ClaimToken)
 	return err
 }
