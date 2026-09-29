@@ -65,6 +65,31 @@ func (db *DB) BeginTx(
 	}, nil
 }
 
+// BeginWorkerTx starts a PostgreSQL transaction without establishing
+// a tenant context.
+//
+// Platform workers such as the transactional outbox dispatcher operate
+// across all tenants. They therefore must not use BeginTx, which sets
+// app.tenant_id and activates tenant-scoped RLS visibility.
+//
+// The database role used by this worker connection must have the
+// appropriate privileges to read and update outbox_events across tenants.
+func (db *DB) BeginWorkerTx(
+	ctx context.Context,
+) (*Tx, error) {
+	tx, err := db.Pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, fmt.Errorf(
+			"begin postgres worker transaction: %w",
+			err,
+		)
+	}
+
+	return &Tx{
+		tx: tx,
+	}, nil
+}
+
 // setTenantID establishes the tenant identifier as a transaction-local
 // PostgreSQL setting.
 //

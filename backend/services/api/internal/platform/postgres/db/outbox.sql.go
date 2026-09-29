@@ -19,16 +19,20 @@ WITH candidates AS (
     WHERE published_at IS NULL
       AND (
           claimed_at IS NULL
-          OR claimed_at < NOW() - ($2 * INTERVAL '1 second')
+          OR claimed_at < NOW()
+              - (
+                  $2::integer
+                  * INTERVAL '1 second'
+              )
       )
     ORDER BY created_at, id
     FOR UPDATE SKIP LOCKED
-    LIMIT $1
+    LIMIT $3
 )
 UPDATE outbox_events AS e
 SET
     claimed_at = NOW(),
-    claim_token = $3
+    claim_token = $1
 FROM candidates
 WHERE e.id = candidates.id
 RETURNING
@@ -45,9 +49,9 @@ RETURNING
 `
 
 type ClaimOutboxEventsParams struct {
-	Limit      int32       `json:"limit"`
-	Column2    interface{} `json:"column_2"`
-	ClaimToken pgtype.UUID `json:"claim_token"`
+	ClaimToken   pgtype.UUID `json:"claim_token"`
+	LeaseSeconds int32       `json:"lease_seconds"`
+	BatchSize    int32       `json:"batch_size"`
 }
 
 type ClaimOutboxEventsRow struct {
@@ -64,7 +68,7 @@ type ClaimOutboxEventsRow struct {
 }
 
 func (q *Queries) ClaimOutboxEvents(ctx context.Context, arg ClaimOutboxEventsParams) ([]ClaimOutboxEventsRow, error) {
-	rows, err := q.db.Query(ctx, claimOutboxEvents, arg.Limit, arg.Column2, arg.ClaimToken)
+	rows, err := q.db.Query(ctx, claimOutboxEvents, arg.ClaimToken, arg.LeaseSeconds, arg.BatchSize)
 	if err != nil {
 		return nil, err
 	}
