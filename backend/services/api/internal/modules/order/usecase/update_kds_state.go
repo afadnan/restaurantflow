@@ -18,12 +18,11 @@ type UpdateKDSStateInput struct {
 }
 
 type UpdateKDSStateUseCase struct {
-	DB        *postgres.DB
-	KDS       domain.KDSRepository
-	Orders    domain.OrderRepository
-	Events    domain.EventRepository
-	Publisher domain.EventPublisher
-	Clock     func() time.Time
+	DB     *postgres.DB
+	KDS    domain.KDSRepository
+	Orders domain.OrderRepository
+	Events domain.EventRepository
+	Clock  func() time.Time
 }
 
 func NewUpdateKDSStateUseCase(
@@ -31,15 +30,13 @@ func NewUpdateKDSStateUseCase(
 	kds domain.KDSRepository,
 	orders domain.OrderRepository,
 	events domain.EventRepository,
-	publisher domain.EventPublisher,
 ) *UpdateKDSStateUseCase {
 	return &UpdateKDSStateUseCase{
-		DB:        db,
-		KDS:       kds,
-		Orders:    orders,
-		Events:    events,
-		Publisher: publisher,
-		Clock:     time.Now,
+		DB:     db,
+		KDS:    kds,
+		Orders: orders,
+		Events: events,
+		Clock:  time.Now,
 	}
 }
 
@@ -88,9 +85,11 @@ func (uc *UpdateKDSStateUseCase) Execute(
 
 	previousState := kdsOrder.State
 
+	now := uc.Clock().UTC()
+
 	if err := kdsOrder.TransitionTo(
 		input.State,
-		uc.Clock().UTC(),
+		now,
 	); err != nil {
 		return fmt.Errorf("kds transition: %w", err)
 	}
@@ -126,7 +125,7 @@ func (uc *UpdateKDSStateUseCase) Execute(
 		OrderID:       input.OrderID,
 		PreviousState: previousState,
 		State:         input.State,
-		OccurredAtT:   uc.Clock().UTC(),
+		OccurredAtT:   now,
 	}
 
 	if err := uc.Events.Append(ctx, tx, event); err != nil {
@@ -138,12 +137,6 @@ func (uc *UpdateKDSStateUseCase) Execute(
 	}
 
 	committed = true
-
-	// This is an immediate best-effort notification.
-	// The durable event already exists in the outbox.
-	if err := uc.Publisher.Publish(ctx, event); err != nil {
-		return fmt.Errorf("publish kds event: %w", err)
-	}
 
 	return nil
 }

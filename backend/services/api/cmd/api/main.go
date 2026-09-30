@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/afadnan/restaurantflow/services/api/internal/platform/database"
 	"github.com/afadnan/restaurantflow/services/api/internal/platform/events"
 	"github.com/afadnan/restaurantflow/services/api/internal/platform/postgres"
+	postgresdb "github.com/afadnan/restaurantflow/services/api/internal/platform/postgres/db"
 	redisplatform "github.com/afadnan/restaurantflow/services/api/internal/platform/redis"
 )
 
@@ -75,6 +77,7 @@ func run() error {
 		"",
 		0,
 	)
+
 	defer func() {
 		if err := redisClient.Close(); err != nil {
 			logger.Error("redis close failed", "error", err)
@@ -95,6 +98,40 @@ func run() error {
 		redisClient,
 		logger,
 	)
+
+	// -------------------------------------------------------------------------
+	// Outbox dispatcher
+	// -------------------------------------------------------------------------
+
+	outboxStore := postgresdb.New(pool)
+
+	dispatcher := events.NewDispatcher(
+		outboxStore,
+		redisPublisher,
+		logger,
+		events.DispatcherConfig{
+			BatchSize:    50,
+			Lease:        30 * time.Second,
+			PollInterval: time.Second,
+		},
+	)
+
+	var dispatcherWG sync.WaitGroup
+
+	dispatcherWG.Add(1)
+
+	go func() {
+		defer dispatcherWG.Done()
+
+		if err := dispatcher.Run(ctx); err != nil &&
+			!errors.Is(err, context.Canceled) {
+			logger.Error(
+				"outbox dispatcher stopped",
+				"error",
+				err,
+			)
+		}
+	}()
 
 	// -------------------------------------------------------------------------
 	// Order repositories
@@ -123,7 +160,6 @@ func run() error {
 		kdsRepository,
 		orderRepository,
 		eventRepository,
-		redisPublisher,
 	)
 
 	// -------------------------------------------------------------------------
@@ -147,13 +183,20 @@ func run() error {
 		nil,
 	)
 
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/healthz", func(
+		w http.ResponseWriter,
+		r *http.Request,
+	) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
+
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
 
-	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/readyz", func(
+		w http.ResponseWriter,
+		r *http.Request,
+	) {
 		if err := pool.Ping(r.Context()); err != nil {
 			http.Error(
 				w,
@@ -174,6 +217,7 @@ func run() error {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
+
 		_, _ = w.Write([]byte(`{"status":"ready"}`))
 	})
 
@@ -204,13 +248,27 @@ func run() error {
 		}
 	}()
 
+	// -------------------------------------------------------------------------
+	// Wait for shutdown signal or HTTP server failure
+	// -------------------------------------------------------------------------
+
 	select {
 	case err := <-serverErr:
+		stop()
+
+		// Give the dispatcher a chance to stop before returning and
+		// closing PostgreSQL/Redis.
+		dispatcherWG.Wait()
+
 		return fmt.Errorf("http server: %w", err)
 
 	case <-ctx.Done():
 		log.Println("shutdown signal received")
 	}
+
+	// -------------------------------------------------------------------------
+	// Graceful HTTP shutdown
+	// -------------------------------------------------------------------------
 
 	shutdownCtx, cancel := context.WithTimeout(
 		context.Background(),
@@ -221,6 +279,12 @@ func run() error {
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("shutdown http server: %w", err)
 	}
+
+	// -------------------------------------------------------------------------
+	// Graceful dispatcher shutdown
+	// -------------------------------------------------------------------------
+
+	dispatcherWG.Wait()
 
 	log.Println("api server stopped")
 
