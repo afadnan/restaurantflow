@@ -873,7 +873,9 @@ func TestOutboxClaim_WrongClaimTokenCannotMarkFailed(t *testing.T) {
 	)
 
 	require.Nil(t, publishedAt)
+
 	require.NotNil(t, claimedAt)
+
 	require.NotNil(t, storedToken)
 
 	require.Equal(
