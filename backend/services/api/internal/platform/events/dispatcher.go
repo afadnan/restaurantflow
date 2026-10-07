@@ -11,9 +11,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/afadnan/restaurantflow/services/api/internal/modules/order/domain"
+	orderdomain "github.com/afadnan/restaurantflow/services/api/internal/modules/order/domain"
 	db "github.com/afadnan/restaurantflow/services/api/internal/platform/postgres/db"
 	redisplatform "github.com/afadnan/restaurantflow/services/api/internal/platform/redis"
+	sharedevents "github.com/afadnan/restaurantflow/shared/events"
 )
 
 const (
@@ -44,7 +45,7 @@ type OutboxStore interface {
 // EventPublisher is the transport used after an outbox event has been
 // durably stored in PostgreSQL.
 type EventPublisher interface {
-	Publish(context.Context, domain.DomainEvent) error
+	Publish(context.Context, sharedevents.DomainEvent) error
 }
 
 type Dispatcher struct {
@@ -126,10 +127,10 @@ func (d *Dispatcher) Run(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			d.logger.Info(
+			d.logger.InfoContext(
+				ctx,
 				"outbox dispatcher stopping",
-				"reason",
-				ctx.Err(),
+				"reason", ctx.Err(),
 			)
 
 			return ctx.Err()
@@ -144,8 +145,7 @@ func (d *Dispatcher) Run(ctx context.Context) error {
 				d.logger.ErrorContext(
 					ctx,
 					"outbox dispatch batch failed",
-					"error",
-					err,
+					"error", err,
 				)
 			}
 		}
@@ -153,6 +153,8 @@ func (d *Dispatcher) Run(ctx context.Context) error {
 }
 
 func (d *Dispatcher) dispatchBatch(ctx context.Context) error {
+	startedAt := time.Now()
+
 	claimToken := uuid.New()
 
 	rows, err := d.store.ClaimOutboxEvents(
@@ -176,13 +178,17 @@ func (d *Dispatcher) dispatchBatch(ctx context.Context) error {
 
 	d.logger.DebugContext(
 		ctx,
-		"claimed outbox events",
-		"count", len(rows),
-		"claim_token", claimToken,
+		"outbox events claimed",
+		"claimed_count", len(rows),
 	)
+
+	publishedCount := 0
+	failedCount := 0
 
 	for _, row := range rows {
 		if err := d.dispatchEvent(ctx, row, claimToken); err != nil {
+			failedCount++
+
 			d.logger.ErrorContext(
 				ctx,
 				"outbox event dispatch failed",
@@ -191,8 +197,21 @@ func (d *Dispatcher) dispatchBatch(ctx context.Context) error {
 				"tenant_id", row.TenantID,
 				"error", err,
 			)
+
+			continue
 		}
+
+		publishedCount++
 	}
+
+	d.logger.DebugContext(
+		ctx,
+		"outbox dispatch batch completed",
+		"claimed_count", len(rows),
+		"published_count", publishedCount,
+		"failed_count", failedCount,
+		"duration_ms", time.Since(startedAt).Milliseconds(),
+	)
 
 	return nil
 }
@@ -203,7 +222,7 @@ func (d *Dispatcher) dispatchEvent(
 	claimToken uuid.UUID,
 ) error {
 	event, err := decodeEvent(
-		domain.EventType(row.EventType),
+		sharedevents.EventType(row.EventType),
 		row.Payload,
 	)
 	if err != nil {
@@ -213,6 +232,15 @@ func (d *Dispatcher) dispatchEvent(
 			claimToken,
 			err,
 		); markErr != nil {
+			d.logger.ErrorContext(
+				ctx,
+				"failed to record outbox event failure",
+				"event_id", row.ID,
+				"event_type", row.EventType,
+				"tenant_id", row.TenantID,
+				"error", markErr,
+			)
+
 			return fmt.Errorf(
 				"decode event: %v; mark failure: %w",
 				err,
@@ -230,6 +258,15 @@ func (d *Dispatcher) dispatchEvent(
 			claimToken,
 			err,
 		); markErr != nil {
+			d.logger.ErrorContext(
+				ctx,
+				"failed to record outbox event failure",
+				"event_id", row.ID,
+				"event_type", row.EventType,
+				"tenant_id", row.TenantID,
+				"error", markErr,
+			)
+
 			return fmt.Errorf(
 				"publish event: %v; mark failure: %w",
 				err,
@@ -281,12 +318,12 @@ func (d *Dispatcher) markFailed(
 }
 
 func decodeEvent(
-	eventType domain.EventType,
+	eventType sharedevents.EventType,
 	payload []byte,
-) (domain.DomainEvent, error) {
+) (sharedevents.DomainEvent, error) {
 	switch eventType {
-	case domain.EventOrderCreated:
-		var event domain.OrderCreatedEvent
+	case orderdomain.EventOrderCreated:
+		var event orderdomain.OrderCreatedEvent
 
 		if err := json.Unmarshal(payload, &event); err != nil {
 			return nil, fmt.Errorf(
@@ -295,7 +332,7 @@ func decodeEvent(
 			)
 		}
 
-		if event.EventID == uuid.Nil {
+		if event.EventID() == uuid.Nil {
 			return nil, errors.New(
 				"order.created event id is nil",
 			)
@@ -303,8 +340,8 @@ func decodeEvent(
 
 		return event, nil
 
-	case domain.EventKDSStateUpdated:
-		var event domain.KDSStateUpdatedEvent
+	case orderdomain.EventKDSStateUpdated:
+		var event orderdomain.KDSStateUpdatedEvent
 
 		if err := json.Unmarshal(payload, &event); err != nil {
 			return nil, fmt.Errorf(
@@ -313,7 +350,7 @@ func decodeEvent(
 			)
 		}
 
-		if event.EventID == uuid.Nil {
+		if event.EventID() == uuid.Nil {
 			return nil, errors.New(
 				"kds.state.updated event id is nil",
 			)

@@ -9,9 +9,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/afadnan/restaurantflow/services/api/internal/modules/order/domain"
 	"github.com/afadnan/restaurantflow/services/api/internal/platform/postgres"
 	db "github.com/afadnan/restaurantflow/services/api/internal/platform/postgres/db"
+	sharedevents "github.com/afadnan/restaurantflow/shared/events"
 )
 
 type PostgresEventRepository struct{}
@@ -22,8 +22,8 @@ func NewPostgresEventRepository() *PostgresEventRepository {
 
 func (r *PostgresEventRepository) Append(
 	ctx context.Context,
-	tx domain.Transaction,
-	event domain.DomainEvent,
+	tx sharedevents.Transaction,
+	event sharedevents.DomainEvent,
 ) error {
 	if event == nil {
 		return errors.New("domain event is required")
@@ -33,7 +33,12 @@ func (r *PostgresEventRepository) Append(
 		return err
 	}
 
-	tenantID := event.Tenant()
+	eventID := event.EventID()
+	if eventID == uuid.Nil {
+		return errors.New("event id is required")
+	}
+
+	tenantID := event.TenantID()
 	if tenantID == uuid.Nil {
 		return errors.New("event tenant id is required")
 	}
@@ -53,11 +58,6 @@ func (r *PostgresEventRepository) Append(
 		return errors.New("event occurred at is required")
 	}
 
-	eventID, err := eventID(event)
-	if err != nil {
-		return err
-	}
-
 	postgresTx, ok := tx.(*postgres.Tx)
 	if !ok {
 		return errors.New("unsupported transaction type")
@@ -70,61 +70,18 @@ func (r *PostgresEventRepository) Append(
 
 	queries := db.New(postgresTx.Raw())
 
-	if err := queries.CreateOutboxEvent(
-		ctx,
-		db.CreateOutboxEventParams{
-			ID:          uuidToPgUUID(eventID),
-			TenantID:    uuidToPgUUID(tenantID),
-			AggregateID: uuidToPgUUID(aggregateID),
-			EventType:   string(eventType),
-			Payload:     payload,
-			OccurredAt:  pgtype.Timestamptz{Time: occurredAt, Valid: true},
-		},
-	); err != nil {
+	if err := queries.CreateOutboxEvent(ctx, db.CreateOutboxEventParams{
+		ID:          uuidToPgUUID(eventID),
+		TenantID:    uuidToPgUUID(tenantID),
+		AggregateID: uuidToPgUUID(aggregateID),
+		EventType:   string(eventType),
+		Payload:     payload,
+		OccurredAt:  pgtype.Timestamptz{Time: occurredAt, Valid: true},
+	}); err != nil {
 		return fmt.Errorf("create outbox event: %w", err)
 	}
 
 	return nil
-}
-
-func eventID(event domain.DomainEvent) (uuid.UUID, error) {
-	switch value := event.(type) {
-	case domain.OrderCreatedEvent:
-		if value.EventID == uuid.Nil {
-			return uuid.Nil, errors.New("order created event id is required")
-		}
-		return value.EventID, nil
-
-	case *domain.OrderCreatedEvent:
-		if value == nil {
-			return uuid.Nil, errors.New("order created event is nil")
-		}
-		if value.EventID == uuid.Nil {
-			return uuid.Nil, errors.New("order created event id is required")
-		}
-		return value.EventID, nil
-
-	case domain.KDSStateUpdatedEvent:
-		if value.EventID == uuid.Nil {
-			return uuid.Nil, errors.New("kds state updated event id is required")
-		}
-		return value.EventID, nil
-
-	case *domain.KDSStateUpdatedEvent:
-		if value == nil {
-			return uuid.Nil, errors.New("kds state updated event is nil")
-		}
-		if value.EventID == uuid.Nil {
-			return uuid.Nil, errors.New("kds state updated event id is required")
-		}
-		return value.EventID, nil
-
-	default:
-		return uuid.Nil, fmt.Errorf(
-			"unsupported domain event type: %T",
-			event,
-		)
-	}
 }
 
 func uuidToPgUUID(value uuid.UUID) pgtype.UUID {
@@ -134,4 +91,4 @@ func uuidToPgUUID(value uuid.UUID) pgtype.UUID {
 	}
 }
 
-var _ domain.EventRepository = (*PostgresEventRepository)(nil)
+var _ sharedevents.EventRepository = (*PostgresEventRepository)(nil)

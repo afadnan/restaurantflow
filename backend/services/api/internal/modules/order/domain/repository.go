@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+
+	sharedevents "github.com/afadnan/restaurantflow/shared/events"
 )
 
 type OrderRepository interface {
@@ -67,14 +69,14 @@ type EventRepository interface {
 	Append(
 		ctx context.Context,
 		tx Transaction,
-		event DomainEvent,
+		event sharedevents.DomainEvent,
 	) error
 }
 
 type EventPublisher interface {
 	Publish(
 		ctx context.Context,
-		event DomainEvent,
+		event sharedevents.DomainEvent,
 	) error
 }
 

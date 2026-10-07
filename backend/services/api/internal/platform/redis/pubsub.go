@@ -8,7 +8,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"github.com/afadnan/restaurantflow/services/api/internal/modules/order/domain"
+	sharedevents "github.com/afadnan/restaurantflow/shared/events"
 )
 
 type Publisher struct {
@@ -35,20 +35,49 @@ func TenantChannel(tenantID string) string {
 }
 
 type envelope struct {
-	EventID     string           `json:"event_id"`
-	EventType   domain.EventType `json:"event_type"`
-	TenantID    string           `json:"tenant_id"`
-	AggregateID string           `json:"aggregate_id"`
-	OccurredAt  string           `json:"occurred_at"`
-	Payload     json.RawMessage  `json:"payload"`
+	EventID     string                 `json:"event_id"`
+	EventType   sharedevents.EventType `json:"event_type"`
+	TenantID    string                 `json:"tenant_id"`
+	AggregateID string                 `json:"aggregate_id"`
+	OccurredAt  string                 `json:"occurred_at"`
+	Payload     json.RawMessage        `json:"payload"`
 }
 
 func (p *Publisher) Publish(
 	ctx context.Context,
-	event domain.DomainEvent,
+	event sharedevents.DomainEvent,
 ) error {
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+
+	if event == nil {
+		return fmt.Errorf("domain event is required")
+	}
+
+	eventID := event.EventID()
+	if eventID == [16]byte{} {
+		return fmt.Errorf("event id is required")
+	}
+
+	tenantID := event.TenantID()
+	if tenantID == [16]byte{} {
+		return fmt.Errorf("event tenant id is required")
+	}
+
+	aggregateID := event.AggregateID()
+	if aggregateID == [16]byte{} {
+		return fmt.Errorf("event aggregate id is required")
+	}
+
+	eventType := event.EventType()
+	if eventType == "" {
+		return fmt.Errorf("event type is required")
+	}
+
+	occurredAt := event.OccurredAt()
+	if occurredAt.IsZero() {
+		return fmt.Errorf("event occurred at is required")
 	}
 
 	payload, err := json.Marshal(event)
@@ -57,11 +86,11 @@ func (p *Publisher) Publish(
 	}
 
 	envelopePayload := envelope{
-		EventID:     eventID(event),
-		EventType:   event.EventType(),
-		TenantID:    event.Tenant().String(),
-		AggregateID: event.AggregateID().String(),
-		OccurredAt:  event.OccurredAt().UTC().Format("2006-01-02T15:04:05.999999Z07:00"),
+		EventID:     eventID.String(),
+		EventType:   eventType,
+		TenantID:    tenantID.String(),
+		AggregateID: aggregateID.String(),
+		OccurredAt:  occurredAt.UTC().Format("2006-01-02T15:04:05.999999Z07:00"),
 		Payload:     payload,
 	}
 
@@ -70,7 +99,7 @@ func (p *Publisher) Publish(
 		return fmt.Errorf("marshal event envelope: %w", err)
 	}
 
-	channel := TenantChannel(event.Tenant().String())
+	channel := TenantChannel(tenantID.String())
 
 	if err := p.client.Publish(
 		ctx,
@@ -80,9 +109,10 @@ func (p *Publisher) Publish(
 		p.logger.ErrorContext(
 			ctx,
 			"redis event publish failed",
-			"tenant_id", event.Tenant(),
-			"event_type", event.EventType(),
-			"aggregate_id", event.AggregateID(),
+			"tenant_id", tenantID,
+			"event_type", eventType,
+			"aggregate_id", aggregateID,
+			"event_id", eventID,
 			"error", err,
 		)
 
@@ -90,19 +120,6 @@ func (p *Publisher) Publish(
 	}
 
 	return nil
-}
-
-func eventID(event domain.DomainEvent) string {
-	switch value := event.(type) {
-	case domain.OrderCreatedEvent:
-		return value.EventID.String()
-
-	case domain.KDSStateUpdatedEvent:
-		return value.EventID.String()
-
-	default:
-		return ""
-	}
 }
 
 func NewClient(
@@ -116,3 +133,5 @@ func NewClient(
 		DB:       db,
 	})
 }
+
+var _ sharedevents.EventPublisher = (*Publisher)(nil)

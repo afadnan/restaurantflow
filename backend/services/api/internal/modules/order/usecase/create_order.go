@@ -161,14 +161,14 @@ func (uc *CreateOrderUseCase) Execute(
 	}
 
 	event := domain.OrderCreatedEvent{
-		EventID:     uuid.New(),
-		TenantID:    order.TenantID.UUID(),
-		OrderID:     order.ID.UUID(),
-		CustomerID:  customerID,
-		State:       order.State,
-		TotalMinor:  order.Total.MinorUnits,
-		Currency:    order.Total.Currency,
-		OccurredAtT: now,
+		ID:         uuid.New(),
+		Tenant:     order.TenantID.UUID(),
+		OrderID:    order.ID.UUID(),
+		CustomerID: customerID,
+		State:      order.State,
+		TotalMinor: order.Total.MinorUnits,
+		Currency:   order.Total.Currency,
+		Occurred:   now,
 	}
 
 	if err := uc.Events.Append(ctx, tx, event); err != nil {

@@ -120,12 +120,12 @@ func (uc *UpdateKDSStateUseCase) Execute(
 	}
 
 	event := domain.KDSStateUpdatedEvent{
-		EventID:       uuid.New(),
-		TenantID:      input.TenantID,
+		ID:            uuid.New(),
+		Tenant:        input.TenantID,
 		OrderID:       input.OrderID,
 		PreviousState: previousState,
 		State:         input.State,
-		OccurredAtT:   now,
+		Occurred:      now,
 	}
 
 	if err := uc.Events.Append(ctx, tx, event); err != nil {

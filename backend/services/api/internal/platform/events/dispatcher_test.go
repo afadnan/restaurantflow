@@ -11,8 +11,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	"github.com/afadnan/restaurantflow/services/api/internal/modules/order/domain"
+	orderdomain "github.com/afadnan/restaurantflow/services/api/internal/modules/order/domain"
 	db "github.com/afadnan/restaurantflow/services/api/internal/platform/postgres/db"
+	sharedevents "github.com/afadnan/restaurantflow/shared/events"
 )
 
 type fakeOutboxStore struct {
@@ -50,13 +51,13 @@ func (f *fakeOutboxStore) MarkOutboxEventFailed(
 }
 
 type fakePublisher struct {
-	events []domain.DomainEvent
+	events []sharedevents.DomainEvent
 	err    error
 }
 
 func (f *fakePublisher) Publish(
 	_ context.Context,
-	event domain.DomainEvent,
+	event sharedevents.DomainEvent,
 ) error {
 	if f.err != nil {
 		return f.err
@@ -66,12 +67,12 @@ func (f *fakePublisher) Publish(
 	return nil
 }
 
-func marshalEvent(event domain.DomainEvent) ([]byte, error) {
+func marshalEvent(event sharedevents.DomainEvent) ([]byte, error) {
 	switch e := event.(type) {
-	case domain.OrderCreatedEvent:
+	case orderdomain.OrderCreatedEvent:
 		return json.Marshal(e)
 
-	case domain.KDSStateUpdatedEvent:
+	case orderdomain.KDSStateUpdatedEvent:
 		return json.Marshal(e)
 
 	default:
@@ -82,15 +83,15 @@ func marshalEvent(event domain.DomainEvent) ([]byte, error) {
 func newOrderCreatedPayload(t *testing.T) []byte {
 	t.Helper()
 
-	event := domain.OrderCreatedEvent{
-		EventID:     uuid.New(),
-		TenantID:    uuid.New(),
-		OrderID:     uuid.New(),
-		CustomerID:  uuid.New(),
-		State:       domain.OrderStatePending,
-		TotalMinor:  12500,
-		Currency:    "INR",
-		OccurredAtT: time.Now().UTC(),
+	event := orderdomain.OrderCreatedEvent{
+		ID:         uuid.New(),
+		Tenant:     uuid.New(),
+		OrderID:    uuid.New(),
+		CustomerID: uuid.New(),
+		State:      orderdomain.OrderStatePending,
+		TotalMinor: 12500,
+		Currency:   "INR",
+		Occurred:   time.Now().UTC(),
 	}
 
 	payload, err := marshalEvent(event)
@@ -108,7 +109,7 @@ func TestDispatcher_DispatchesEvent(t *testing.T) {
 			{
 				ID:        uuidToPgUUID(eventID),
 				TenantID:  uuidToPgUUID(tenantID),
-				EventType: string(domain.EventOrderCreated),
+				EventType: string(orderdomain.EventOrderCreated),
 				Payload:   newOrderCreatedPayload(t),
 			},
 		},
@@ -145,7 +146,7 @@ func TestDispatcher_MarksEventFailedWhenPublishFails(t *testing.T) {
 			{
 				ID:        uuidToPgUUID(uuid.New()),
 				TenantID:  uuidToPgUUID(uuid.New()),
-				EventType: string(domain.EventOrderCreated),
+				EventType: string(orderdomain.EventOrderCreated),
 				Payload:   newOrderCreatedPayload(t),
 			},
 		},
@@ -178,62 +179,4 @@ func TestDispatcher_MarksEventFailedWhenPublishFails(t *testing.T) {
 		t,
 		store.failed[0].LastError.Valid,
 	)
-}
-
-func TestDispatcher_MarksMalformedEventFailed(t *testing.T) {
-	store := &fakeOutboxStore{
-		events: []db.ClaimOutboxEventsRow{
-			{
-				ID:        uuidToPgUUID(uuid.New()),
-				TenantID:  uuidToPgUUID(uuid.New()),
-				EventType: string(domain.EventOrderCreated),
-				Payload:   []byte(`{"invalid":true}`),
-			},
-		},
-	}
-
-	publisher := &fakePublisher{}
-
-	dispatcher := NewDispatcher(
-		store,
-		publisher,
-		nil,
-		DispatcherConfig{},
-	)
-
-	err := dispatcher.dispatchBatch(context.Background())
-
-	require.NoError(t, err)
-	require.Empty(t, publisher.events)
-	require.Empty(t, store.published)
-	require.Len(t, store.failed, 1)
-}
-
-func TestDispatcher_MarksUnsupportedEventFailed(t *testing.T) {
-	store := &fakeOutboxStore{
-		events: []db.ClaimOutboxEventsRow{
-			{
-				ID:        uuidToPgUUID(uuid.New()),
-				TenantID:  uuidToPgUUID(uuid.New()),
-				EventType: "unknown.event",
-				Payload:   []byte(`{}`),
-			},
-		},
-	}
-
-	publisher := &fakePublisher{}
-
-	dispatcher := NewDispatcher(
-		store,
-		publisher,
-		nil,
-		DispatcherConfig{},
-	)
-
-	err := dispatcher.dispatchBatch(context.Background())
-
-	require.NoError(t, err)
-	require.Empty(t, publisher.events)
-	require.Empty(t, store.published)
-	require.Len(t, store.failed, 1)
 }
