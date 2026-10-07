@@ -18,8 +18,9 @@ import (
 )
 
 type dispatcherIntegrationDB struct {
-	appPool    *pgxpool.Pool
-	workerPool *pgxpool.Pool
+	appPool     *pgxpool.Pool
+	workerPool  *pgxpool.Pool
+	cleanupPool *pgxpool.Pool
 }
 
 func newDispatcherIntegrationDB(t *testing.T) *dispatcherIntegrationDB {
@@ -34,9 +35,18 @@ func newDispatcherIntegrationDB(t *testing.T) *dispatcherIntegrationDB {
 	workerUser := os.Getenv("OUTBOX_TEST_DATABASE_USER")
 	workerPassword := os.Getenv("OUTBOX_TEST_DATABASE_PASSWORD")
 
+	cleanupUser := os.Getenv("OUTBOX_TEST_CLEANUP_DATABASE_USER")
+	cleanupPassword := os.Getenv("OUTBOX_TEST_CLEANUP_DATABASE_PASSWORD")
+
 	if workerUser == "" || workerPassword == "" {
 		t.Fatal(
 			"OUTBOX_TEST_DATABASE_USER and OUTBOX_TEST_DATABASE_PASSWORD are required",
+		)
+	}
+
+	if cleanupUser == "" || cleanupPassword == "" {
+		t.Fatal(
+			"OUTBOX_TEST_CLEANUP_DATABASE_USER and OUTBOX_TEST_CLEANUP_DATABASE_PASSWORD are required",
 		)
 	}
 
@@ -49,9 +59,11 @@ func newDispatcherIntegrationDB(t *testing.T) *dispatcherIntegrationDB {
 	cfg, err := config.Load()
 	require.NoError(t, err)
 
+	// Application runtime connection.
 	appPool, err := database.NewPostgresPool(ctx, cfg.Database)
 	require.NoError(t, err)
 
+	// Outbox worker connection.
 	workerCfg := cfg.Database
 	workerCfg.User = workerUser
 	workerCfg.Password = workerPassword
@@ -59,17 +71,32 @@ func newDispatcherIntegrationDB(t *testing.T) *dispatcherIntegrationDB {
 	workerPool, err := database.NewPostgresPool(ctx, workerCfg)
 	require.NoError(t, err)
 
+	// Dedicated integration-test cleanup connection.
+	//
+	// This connection is intentionally separate from both runtime roles.
+	// It exists only so tests can perform destructive database cleanup
+	// such as TRUNCATE.
+	cleanupCfg := cfg.Database
+	cleanupCfg.User = cleanupUser
+	cleanupCfg.Password = cleanupPassword
+
+	cleanupPool, err := database.NewPostgresPool(ctx, cleanupCfg)
+	require.NoError(t, err)
+
 	t.Cleanup(func() {
+		cleanupPool.Close()
 		workerPool.Close()
 		appPool.Close()
 	})
 
 	require.NoError(t, appPool.Ping(ctx))
 	require.NoError(t, workerPool.Ping(ctx))
+	require.NoError(t, cleanupPool.Ping(ctx))
 
 	return &dispatcherIntegrationDB{
-		appPool:    appPool,
-		workerPool: workerPool,
+		appPool:     appPool,
+		workerPool:  workerPool,
+		cleanupPool: cleanupPool,
 	}
 }
 
@@ -254,6 +281,7 @@ func claimEvents(
 func readOutboxState(
 	t *testing.T,
 	pool *pgxpool.Pool,
+	tenantID uuid.UUID,
 	eventID uuid.UUID,
 ) (
 	publishedAt *time.Time,
@@ -269,11 +297,25 @@ func readOutboxState(
 	)
 	defer cancel()
 
+	tx, err := pool.Begin(ctx)
+	require.NoError(t, err)
+
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	_, err = tx.Exec(
+		ctx,
+		`SELECT set_config('app.tenant_id', $1, true)`,
+		tenantID.String(),
+	)
+	require.NoError(t, err)
+
 	var published pgtype.Timestamptz
 	var claimed pgtype.Timestamptz
 	var token pgtype.UUID
 
-	err := pool.QueryRow(
+	err = tx.QueryRow(
 		ctx,
 		`
 		SELECT
@@ -293,6 +335,7 @@ func readOutboxState(
 	)
 
 	require.NoError(t, err)
+	require.NoError(t, tx.Rollback(ctx))
 
 	if published.Valid {
 		value := published.Time
@@ -314,7 +357,7 @@ func readOutboxState(
 
 func TestOutboxClaim_ConcurrentWorkersClaimEventOnce(t *testing.T) {
 	db := newDispatcherIntegrationDB(t)
-	resetOutboxEvents(t, db.workerPool)
+	resetOutboxEvents(t, db.cleanupPool)
 
 	tenantID := createOutboxTenant(
 		t,
@@ -408,7 +451,8 @@ func TestOutboxClaim_ConcurrentWorkersClaimEventOnce(t *testing.T) {
 
 	publishedAt, claimedAt, claimToken, attempts := readOutboxState(
 		t,
-		db.workerPool,
+		db.appPool,
+		tenantID,
 		eventID,
 	)
 
@@ -420,7 +464,7 @@ func TestOutboxClaim_ConcurrentWorkersClaimEventOnce(t *testing.T) {
 
 func TestOutboxClaim_DistributesEventsAcrossWorkers(t *testing.T) {
 	db := newDispatcherIntegrationDB(t)
-	resetOutboxEvents(t, db.workerPool)
+	resetOutboxEvents(t, db.cleanupPool)
 
 	tenantID := createOutboxTenant(
 		t,
@@ -516,9 +560,128 @@ func TestOutboxClaim_DistributesEventsAcrossWorkers(t *testing.T) {
 	)
 }
 
+func TestOutboxClaim_CrossTenantConcurrentWorkersCanClaimIndependently(
+	t *testing.T,
+) {
+	db := newDispatcherIntegrationDB(t)
+	resetOutboxEvents(t, db.cleanupPool)
+
+	tenantA := createOutboxTenant(
+		t,
+		db.appPool,
+	)
+
+	tenantB := createOutboxTenant(
+		t,
+		db.appPool,
+	)
+
+	eventA := createTestOutboxEvent(
+		t,
+		db.appPool,
+		tenantA,
+	)
+
+	eventB := createTestOutboxEvent(
+		t,
+		db.appPool,
+		tenantB,
+	)
+
+	type result struct {
+		rows []postgresdb.ClaimOutboxEventsRow
+		err  error
+	}
+
+	results := make(chan result, 2)
+	start := make(chan struct{})
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	claim := func() {
+		defer wg.Done()
+
+		<-start
+
+		ctx, cancel := context.WithTimeout(
+			context.Background(),
+			5*time.Second,
+		)
+		defer cancel()
+
+		token := uuid.New()
+
+		rows, err := postgresdb.New(
+			db.workerPool,
+		).ClaimOutboxEvents(
+			ctx,
+			postgresdb.ClaimOutboxEventsParams{
+				ClaimToken: pgtype.UUID{
+					Bytes: token,
+					Valid: true,
+				},
+				LeaseSeconds: 60,
+				BatchSize:    1,
+			},
+		)
+
+		results <- result{
+			rows: rows,
+			err:  err,
+		}
+	}
+
+	go claim()
+	go claim()
+
+	close(start)
+
+	wg.Wait()
+	close(results)
+
+	var claimedEvents []uuid.UUID
+	var claimedTenants []uuid.UUID
+
+	for result := range results {
+		require.NoError(t, result.err)
+		require.Len(t, result.rows, 1)
+
+		row := result.rows[0]
+
+		claimedEvents = append(
+			claimedEvents,
+			uuid.UUID(row.ID.Bytes),
+		)
+
+		claimedTenants = append(
+			claimedTenants,
+			uuid.UUID(row.TenantID.Bytes),
+		)
+	}
+
+	require.ElementsMatch(
+		t,
+		[]uuid.UUID{
+			eventA,
+			eventB,
+		},
+		claimedEvents,
+	)
+
+	require.ElementsMatch(
+		t,
+		[]uuid.UUID{
+			tenantA,
+			tenantB,
+		},
+		claimedTenants,
+	)
+}
+
 func TestOutboxClaim_ActiveLeasePreventsReclaim(t *testing.T) {
 	db := newDispatcherIntegrationDB(t)
-	resetOutboxEvents(t, db.workerPool)
+	resetOutboxEvents(t, db.cleanupPool)
 
 	tenantID := createOutboxTenant(
 		t,
@@ -562,7 +725,8 @@ func TestOutboxClaim_ActiveLeasePreventsReclaim(t *testing.T) {
 
 	_, claimedAt, claimToken, _ := readOutboxState(
 		t,
-		db.workerPool,
+		db.appPool,
+		tenantID,
 		eventID,
 	)
 
@@ -578,7 +742,7 @@ func TestOutboxClaim_ActiveLeasePreventsReclaim(t *testing.T) {
 
 func TestOutboxClaim_ExpiredLeaseCanBeReclaimed(t *testing.T) {
 	db := newDispatcherIntegrationDB(t)
-	resetOutboxEvents(t, db.workerPool)
+	resetOutboxEvents(t, db.cleanupPool)
 
 	tenantID := createOutboxTenant(
 		t,
@@ -640,7 +804,8 @@ func TestOutboxClaim_ExpiredLeaseCanBeReclaimed(t *testing.T) {
 
 	_, claimedAt, claimToken, _ := readOutboxState(
 		t,
-		db.workerPool,
+		db.appPool,
+		tenantID,
 		eventID,
 	)
 
@@ -654,9 +819,165 @@ func TestOutboxClaim_ExpiredLeaseCanBeReclaimed(t *testing.T) {
 	)
 }
 
+func TestOutboxClaim_StaleWorkerCannotCompleteAfterReclaim(t *testing.T) {
+	db := newDispatcherIntegrationDB(t)
+	resetOutboxEvents(t, db.cleanupPool)
+
+	tenantID := createOutboxTenant(
+		t,
+		db.appPool,
+	)
+
+	eventID := createTestOutboxEvent(
+		t,
+		db.appPool,
+		tenantID,
+	)
+
+	firstToken := uuid.New()
+	secondToken := uuid.New()
+
+	firstRows := claimEvents(
+		t,
+		db.workerPool,
+		firstToken,
+		60,
+		1,
+	)
+
+	require.Len(t, firstRows, 1)
+
+	require.Equal(
+		t,
+		eventID,
+		uuid.UUID(firstRows[0].ID.Bytes),
+	)
+
+	ctx, cancel := context.WithTimeout(
+		context.Background(),
+		5*time.Second,
+	)
+	defer cancel()
+
+	// Simulate Worker A's lease expiring while Worker A is still
+	// alive or otherwise unable to complete the event.
+	_, err := db.workerPool.Exec(
+		ctx,
+		`
+		UPDATE outbox_events
+		SET claimed_at = NOW() - INTERVAL '5 minutes'
+		WHERE id = $1
+		  AND claim_token = $2
+		  AND published_at IS NULL
+		`,
+		eventID,
+		firstToken,
+	)
+
+	require.NoError(t, err)
+
+	// Worker B is now allowed to reclaim the expired event.
+	secondRows := claimEvents(
+		t,
+		db.workerPool,
+		secondToken,
+		60,
+		1,
+	)
+
+	require.Len(t, secondRows, 1)
+
+	require.Equal(
+		t,
+		eventID,
+		uuid.UUID(secondRows[0].ID.Bytes),
+	)
+
+	_, claimedAt, storedToken, _ := readOutboxState(
+		t,
+		db.appPool,
+		tenantID,
+		eventID,
+	)
+
+	require.NotNil(t, claimedAt)
+	require.NotNil(t, storedToken)
+
+	require.Equal(
+		t,
+		secondToken,
+		*storedToken,
+	)
+
+	// Worker A is stale. Its old claim token must no longer
+	// authorize completion.
+	err = postgresdb.New(
+		db.workerPool,
+	).MarkOutboxEventPublished(
+		ctx,
+		postgresdb.MarkOutboxEventPublishedParams{
+			ID: pgtype.UUID{
+				Bytes: eventID,
+				Valid: true,
+			},
+			ClaimToken: pgtype.UUID{
+				Bytes: firstToken,
+				Valid: true,
+			},
+		},
+	)
+
+	require.NoError(t, err)
+
+	publishedAt, claimedAt, storedToken, attempts := readOutboxState(
+		t,
+		db.appPool,
+		tenantID,
+		eventID,
+	)
+
+	require.Nil(t, publishedAt)
+	require.NotNil(t, claimedAt)
+	require.NotNil(t, storedToken)
+	require.Equal(t, secondToken, *storedToken)
+	require.Equal(t, int32(0), attempts)
+
+	// Worker B, which currently owns the claim, must still
+	// be able to complete the event.
+	err = postgresdb.New(
+		db.workerPool,
+	).MarkOutboxEventPublished(
+		ctx,
+		postgresdb.MarkOutboxEventPublishedParams{
+			ID: pgtype.UUID{
+				Bytes: eventID,
+				Valid: true,
+			},
+			ClaimToken: pgtype.UUID{
+				Bytes: secondToken,
+				Valid: true,
+			},
+		},
+	)
+
+	require.NoError(t, err)
+
+	publishedAt, claimedAt, storedToken, attempts = readOutboxState(
+		t,
+		db.appPool,
+		tenantID,
+		eventID,
+	)
+
+	require.NotNil(t, publishedAt)
+	require.Nil(t, claimedAt)
+	require.Nil(t, storedToken)
+	require.Equal(t, int32(0), attempts)
+}
+
 func TestOutboxClaim_PublishedEventIsSkipped(t *testing.T) {
 	db := newDispatcherIntegrationDB(t)
-	resetOutboxEvents(t, db.workerPool)
+	resetOutboxEvents(t, db.cleanupPool)
 
 	tenantID := createOutboxTenant(
 		t,
@@ -725,7 +1046,8 @@ func TestOutboxClaim_PublishedEventIsSkipped(t *testing.T) {
 
 	publishedAt, claimedAt, storedToken, attempts := readOutboxState(
 		t,
-		db.workerPool,
+		db.appPool,
+		tenantID,
 		eventID,
 	)
 
@@ -737,7 +1059,7 @@ func TestOutboxClaim_PublishedEventIsSkipped(t *testing.T) {
 
 func TestOutboxClaim_WrongClaimTokenCannotCompleteEvent(t *testing.T) {
 	db := newDispatcherIntegrationDB(t)
-	resetOutboxEvents(t, db.workerPool)
+	resetOutboxEvents(t, db.cleanupPool)
 
 	tenantID := createOutboxTenant(
 		t,
@@ -789,7 +1111,8 @@ func TestOutboxClaim_WrongClaimTokenCannotCompleteEvent(t *testing.T) {
 
 	publishedAt, claimedAt, storedToken, attempts := readOutboxState(
 		t,
-		db.workerPool,
+		db.appPool,
+		tenantID,
 		eventID,
 	)
 
@@ -812,7 +1135,7 @@ func TestOutboxClaim_WrongClaimTokenCannotCompleteEvent(t *testing.T) {
 
 func TestOutboxClaim_WrongClaimTokenCannotMarkFailed(t *testing.T) {
 	db := newDispatcherIntegrationDB(t)
-	resetOutboxEvents(t, db.workerPool)
+	resetOutboxEvents(t, db.cleanupPool)
 
 	tenantID := createOutboxTenant(
 		t,
@@ -868,7 +1191,8 @@ func TestOutboxClaim_WrongClaimTokenCannotMarkFailed(t *testing.T) {
 
 	publishedAt, claimedAt, storedToken, attempts := readOutboxState(
 		t,
-		db.workerPool,
+		db.appPool,
+		tenantID,
 		eventID,
 	)
 
