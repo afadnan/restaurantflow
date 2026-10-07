@@ -4,12 +4,13 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 type Transaction interface {
 	Commit(ctx context.Context) error
 	Rollback(ctx context.Context) error
-	Raw() any
+	Raw() pgx.Tx
 }
 
 type RestaurantRepository interface {
