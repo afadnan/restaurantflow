@@ -18,6 +18,7 @@ import (
 	"github.com/afadnan/restaurantflow/services/api/internal/platform/database"
 	"github.com/afadnan/restaurantflow/services/api/internal/platform/events"
 	"github.com/afadnan/restaurantflow/services/api/internal/platform/postgres"
+	sharedevents "github.com/afadnan/restaurantflow/shared/events"
 )
 
 type integrationDB struct {
@@ -271,8 +272,8 @@ type failingEventRepository struct {
 
 func (r failingEventRepository) Append(
 	ctx context.Context,
-	tx orderdomain.Transaction,
-	event orderdomain.DomainEvent,
+	tx sharedevents.Transaction,
+	event sharedevents.DomainEvent,
 ) error {
 	return r.err
 }

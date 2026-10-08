@@ -9,6 +9,7 @@ import (
 )
 
 type Querier interface {
+	ActivateRestaurant(ctx context.Context, arg ActivateRestaurantParams) (Restaurant, error)
 	CancelOrder(ctx context.Context, arg CancelOrderParams) (Order, error)
 	CheckInventoryForOrder(ctx context.Context, arg CheckInventoryForOrderParams) ([]CheckInventoryForOrderRow, error)
 	ClaimOutboxEvents(ctx context.Context, arg ClaimOutboxEventsParams) ([]ClaimOutboxEventsRow, error)
@@ -17,19 +18,26 @@ type Querier interface {
 	CreateOrder(ctx context.Context, arg CreateOrderParams) (Order, error)
 	CreateOrderItem(ctx context.Context, arg CreateOrderItemParams) (OrderItem, error)
 	CreateOutboxEvent(ctx context.Context, arg CreateOutboxEventParams) error
+	CreateRestaurant(ctx context.Context, arg CreateRestaurantParams) (Restaurant, error)
+	DeactivateRestaurant(ctx context.Context, arg DeactivateRestaurantParams) (Restaurant, error)
 	DeductInventoryForOrder(ctx context.Context, arg DeductInventoryForOrderParams) (int64, error)
 	GetKDSTicketByID(ctx context.Context, arg GetKDSTicketByIDParams) (KdsTicket, error)
 	GetKDSTicketByOrderID(ctx context.Context, arg GetKDSTicketByOrderIDParams) (KdsTicket, error)
 	GetOrderByID(ctx context.Context, arg GetOrderByIDParams) (Order, error)
 	GetOrderItemByID(ctx context.Context, arg GetOrderItemByIDParams) (OrderItem, error)
+	GetRestaurantByID(ctx context.Context, arg GetRestaurantByIDParams) (Restaurant, error)
+	GetRestaurantBySlug(ctx context.Context, arg GetRestaurantBySlugParams) (Restaurant, error)
 	ListKDSQueue(ctx context.Context, arg ListKDSQueueParams) ([]KdsTicket, error)
 	ListOrderItems(ctx context.Context, arg ListOrderItemsParams) ([]OrderItem, error)
 	ListOrders(ctx context.Context, arg ListOrdersParams) ([]Order, error)
+	ListRestaurants(ctx context.Context, arg ListRestaurantsParams) ([]Restaurant, error)
 	MarkOutboxEventFailed(ctx context.Context, arg MarkOutboxEventFailedParams) error
 	MarkOutboxEventPublished(ctx context.Context, arg MarkOutboxEventPublishedParams) error
+	SuspendRestaurant(ctx context.Context, arg SuspendRestaurantParams) (Restaurant, error)
 	UpdateKDSStatus(ctx context.Context, arg UpdateKDSStatusParams) (KdsTicket, error)
 	UpdateOrderPaymentStatus(ctx context.Context, arg UpdateOrderPaymentStatusParams) (Order, error)
 	UpdateOrderStatus(ctx context.Context, arg UpdateOrderStatusParams) (Order, error)
+	UpdateRestaurant(ctx context.Context, arg UpdateRestaurantParams) (Restaurant, error)
 }
 
 var _ Querier = (*Queries)(nil)

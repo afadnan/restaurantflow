@@ -64,10 +64,7 @@ type UpdateRestaurantInput struct {
 	Longitude    *float64
 }
 
-func NewRestaurant(
-	input CreateRestaurantInput,
-	now time.Time,
-) (*Restaurant, error) {
+func NewRestaurant(input CreateRestaurantInput, now time.Time) (*Restaurant, error) {
 	if input.TenantID == uuid.Nil {
 		return nil, ErrInvalidTenantID
 	}
@@ -118,10 +115,7 @@ func NewRestaurant(
 	}, nil
 }
 
-func (r *Restaurant) Update(
-	input UpdateRestaurantInput,
-	now time.Time,
-) error {
+func (r *Restaurant) Update(input UpdateRestaurantInput, now time.Time) error {
 	if r == nil {
 		return errors.New("restaurant is required")
 	}
@@ -134,8 +128,7 @@ func (r *Restaurant) Update(
 		return ErrInvalidTenantID
 	}
 
-	if input.RestaurantID == uuid.Nil ||
-		input.RestaurantID != r.ID.UUID() {
+	if input.RestaurantID == uuid.Nil || input.RestaurantID != r.ID.UUID() {
 		return ErrInvalidRestaurantID
 	}
 
@@ -241,20 +234,13 @@ func (r *Restaurant) CanAcceptOrders() error {
 	}
 }
 
-func validateCoordinates(
-	latitude *float64,
-	longitude *float64,
-) error {
-	if latitude != nil {
-		if *latitude < -90 || *latitude > 90 {
-			return ErrInvalidLatitude
-		}
+func validateCoordinates(latitude *float64, longitude *float64) error {
+	if latitude != nil && (*latitude < -90 || *latitude > 90) {
+		return ErrInvalidLatitude
 	}
 
-	if longitude != nil {
-		if *longitude < -180 || *longitude > 180 {
-			return ErrInvalidLongitude
-		}
+	if longitude != nil && (*longitude < -180 || *longitude > 180) {
+		return ErrInvalidLongitude
 	}
 
 	return nil

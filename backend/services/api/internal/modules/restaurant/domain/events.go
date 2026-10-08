@@ -4,25 +4,17 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-)
 
-type EventType string
+	sharedevents "github.com/afadnan/restaurantflow/shared/events"
+)
 
 const (
-	EventTypeRestaurantCreated     EventType = "restaurant.created"
-	EventTypeRestaurantUpdated     EventType = "restaurant.updated"
-	EventTypeRestaurantActivated   EventType = "restaurant.activated"
-	EventTypeRestaurantDeactivated EventType = "restaurant.deactivated"
-	EventTypeRestaurantSuspended   EventType = "restaurant.suspended"
+	EventTypeRestaurantCreated     sharedevents.EventType = "restaurant.created"
+	EventTypeRestaurantUpdated     sharedevents.EventType = "restaurant.updated"
+	EventTypeRestaurantActivated   sharedevents.EventType = "restaurant.activated"
+	EventTypeRestaurantDeactivated sharedevents.EventType = "restaurant.deactivated"
+	EventTypeRestaurantSuspended   sharedevents.EventType = "restaurant.suspended"
 )
-
-type DomainEvent interface {
-	EventID() uuid.UUID
-	TenantID() uuid.UUID
-	AggregateID() uuid.UUID
-	EventType() EventType
-	OccurredAt() time.Time
-}
 
 type RestaurantCreatedEvent struct {
 	ID         uuid.UUID
@@ -43,7 +35,7 @@ func (e RestaurantCreatedEvent) AggregateID() uuid.UUID {
 	return e.Restaurant
 }
 
-func (e RestaurantCreatedEvent) EventType() EventType {
+func (e RestaurantCreatedEvent) EventType() sharedevents.EventType {
 	return EventTypeRestaurantCreated
 }
 
@@ -70,7 +62,7 @@ func (e RestaurantUpdatedEvent) AggregateID() uuid.UUID {
 	return e.Restaurant
 }
 
-func (e RestaurantUpdatedEvent) EventType() EventType {
+func (e RestaurantUpdatedEvent) EventType() sharedevents.EventType {
 	return EventTypeRestaurantUpdated
 }
 
@@ -97,7 +89,7 @@ func (e RestaurantActivatedEvent) AggregateID() uuid.UUID {
 	return e.Restaurant
 }
 
-func (e RestaurantActivatedEvent) EventType() EventType {
+func (e RestaurantActivatedEvent) EventType() sharedevents.EventType {
 	return EventTypeRestaurantActivated
 }
 
@@ -124,7 +116,7 @@ func (e RestaurantDeactivatedEvent) AggregateID() uuid.UUID {
 	return e.Restaurant
 }
 
-func (e RestaurantDeactivatedEvent) EventType() EventType {
+func (e RestaurantDeactivatedEvent) EventType() sharedevents.EventType {
 	return EventTypeRestaurantDeactivated
 }
 
@@ -151,10 +143,18 @@ func (e RestaurantSuspendedEvent) AggregateID() uuid.UUID {
 	return e.Restaurant
 }
 
-func (e RestaurantSuspendedEvent) EventType() EventType {
+func (e RestaurantSuspendedEvent) EventType() sharedevents.EventType {
 	return EventTypeRestaurantSuspended
 }
 
 func (e RestaurantSuspendedEvent) OccurredAt() time.Time {
 	return e.Occurred
 }
+
+var (
+	_ sharedevents.DomainEvent = RestaurantCreatedEvent{}
+	_ sharedevents.DomainEvent = RestaurantUpdatedEvent{}
+	_ sharedevents.DomainEvent = RestaurantActivatedEvent{}
+	_ sharedevents.DomainEvent = RestaurantDeactivatedEvent{}
+	_ sharedevents.DomainEvent = RestaurantSuspendedEvent{}
+)

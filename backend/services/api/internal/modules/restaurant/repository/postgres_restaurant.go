@@ -242,8 +242,8 @@ func (r *PostgresRestaurantRepository) Update(
 	q := db.New(pgTx.Raw())
 
 	_, err = q.UpdateRestaurant(ctx, db.UpdateRestaurantParams{
-		ID:           uuidToPgUUID(restaurant.ID.UUID()),
 		TenantID:     uuidToPgUUID(restaurant.TenantID.UUID()),
+		ID:           uuidToPgUUID(restaurant.ID.UUID()),
 		Name:         restaurant.Name.String(),
 		Slug:         restaurant.Slug.String(),
 		Description:  textToPgText(restaurant.Description),
@@ -287,8 +287,8 @@ func (r *PostgresRestaurantRepository) Activate(
 	q := db.New(pgTx.Raw())
 
 	row, err := q.ActivateRestaurant(ctx, db.ActivateRestaurantParams{
-		ID:       uuidToPgUUID(restaurantID),
 		TenantID: uuidToPgUUID(tenantID),
+		ID:       uuidToPgUUID(restaurantID),
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -323,8 +323,8 @@ func (r *PostgresRestaurantRepository) Deactivate(
 	q := db.New(pgTx.Raw())
 
 	row, err := q.DeactivateRestaurant(ctx, db.DeactivateRestaurantParams{
-		ID:       uuidToPgUUID(restaurantID),
 		TenantID: uuidToPgUUID(tenantID),
+		ID:       uuidToPgUUID(restaurantID),
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -359,8 +359,8 @@ func (r *PostgresRestaurantRepository) Suspend(
 	q := db.New(pgTx.Raw())
 
 	row, err := q.SuspendRestaurant(ctx, db.SuspendRestaurantParams{
-		ID:       uuidToPgUUID(restaurantID),
 		TenantID: uuidToPgUUID(tenantID),
+		ID:       uuidToPgUUID(restaurantID),
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

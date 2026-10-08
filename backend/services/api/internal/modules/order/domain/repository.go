@@ -80,7 +80,4 @@ type EventPublisher interface {
 	) error
 }
 
-type Transaction interface {
-	Commit(ctx context.Context) error
-	Rollback(ctx context.Context) error
-}
+type Transaction = sharedevents.Transaction

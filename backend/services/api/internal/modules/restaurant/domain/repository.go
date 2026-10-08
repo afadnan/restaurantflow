@@ -3,15 +3,11 @@ package domain
 import (
 	"context"
 
+	sharedevents "github.com/afadnan/restaurantflow/shared/events"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 )
 
-type Transaction interface {
-	Commit(ctx context.Context) error
-	Rollback(ctx context.Context) error
-	Raw() pgx.Tx
-}
+type Transaction = sharedevents.Transaction
 
 type RestaurantRepository interface {
 	Create(
