@@ -18,6 +18,9 @@ import (
 	httpdelivery "github.com/afadnan/restaurantflow/services/api/internal/modules/order/delivery/http"
 	"github.com/afadnan/restaurantflow/services/api/internal/modules/order/repository"
 	"github.com/afadnan/restaurantflow/services/api/internal/modules/order/usecase"
+	httprestaurant "github.com/afadnan/restaurantflow/services/api/internal/modules/restaurant/delivery/http"
+	restaurantrepository "github.com/afadnan/restaurantflow/services/api/internal/modules/restaurant/repository"
+	restaurantusecase "github.com/afadnan/restaurantflow/services/api/internal/modules/restaurant/usecase"
 	"github.com/afadnan/restaurantflow/services/api/internal/platform/database"
 	"github.com/afadnan/restaurantflow/services/api/internal/platform/events"
 	"github.com/afadnan/restaurantflow/services/api/internal/platform/postgres"
@@ -134,13 +137,26 @@ func run() error {
 	}()
 
 	// -------------------------------------------------------------------------
+	// Shared event repository
+	// -------------------------------------------------------------------------
+
+	// Order and Restaurant share the same event repository so their domain
+	// events use the existing transactional outbox infrastructure.
+	eventRepository := events.NewPostgresEventRepository()
+
+	// -------------------------------------------------------------------------
 	// Order repositories
 	// -------------------------------------------------------------------------
 
 	orderRepository := repository.NewPostgresOrderRepository()
 	kdsRepository := repository.NewPostgresKDSRepository()
 	inventoryRepository := repository.NewPostgresInventoryRepository()
-	eventRepository := events.NewPostgresEventRepository()
+
+	// -------------------------------------------------------------------------
+	// Restaurant repositories
+	// -------------------------------------------------------------------------
+
+	restaurantRepository := restaurantrepository.NewPostgresRestaurantRepository()
 
 	// -------------------------------------------------------------------------
 	// Order use cases
@@ -163,12 +179,55 @@ func run() error {
 	)
 
 	// -------------------------------------------------------------------------
+	// Restaurant use cases
+	// -------------------------------------------------------------------------
+
+	createRestaurantUseCase := &restaurantusecase.CreateRestaurantUseCase{
+		DB:          db,
+		Restaurants: restaurantRepository,
+		Events:      eventRepository,
+		Clock:       restaurantusecase.SystemClock{},
+	}
+
+	getRestaurantUseCase := &restaurantusecase.GetRestaurantUseCase{
+		DB:          db,
+		Restaurants: restaurantRepository,
+	}
+
+	listRestaurantsUseCase := &restaurantusecase.ListRestaurantsUseCase{
+		DB:          db,
+		Restaurants: restaurantRepository,
+	}
+
+	updateRestaurantUseCase := &restaurantusecase.UpdateRestaurantUseCase{
+		DB:          db,
+		Restaurants: restaurantRepository,
+		Events:      eventRepository,
+		Clock:       restaurantusecase.SystemClock{},
+	}
+
+	deactivateRestaurantUseCase := &restaurantusecase.DeactivateRestaurantUseCase{
+		DB:          db,
+		Restaurants: restaurantRepository,
+		Events:      eventRepository,
+		Clock:       restaurantusecase.SystemClock{},
+	}
+
+	// -------------------------------------------------------------------------
 	// HTTP handlers
 	// -------------------------------------------------------------------------
 
 	orderHandler := httpdelivery.NewOrderHandler(
 		createOrderUseCase,
 		updateKDSStateUseCase,
+	)
+
+	restaurantHandler := httprestaurant.NewRestaurantHandler(
+		createRestaurantUseCase,
+		getRestaurantUseCase,
+		listRestaurantsUseCase,
+		updateRestaurantUseCase,
+		deactivateRestaurantUseCase,
 	)
 
 	// -------------------------------------------------------------------------
@@ -182,6 +241,15 @@ func run() error {
 		orderHandler,
 		nil,
 	)
+
+	httprestaurant.RegisterRoutes(
+		mux,
+		restaurantHandler,
+	)
+
+	// -------------------------------------------------------------------------
+	// Health checks
+	// -------------------------------------------------------------------------
 
 	mux.HandleFunc("/healthz", func(
 		w http.ResponseWriter,
@@ -198,6 +266,7 @@ func run() error {
 		r *http.Request,
 	) {
 		if err := pool.Ping(r.Context()); err != nil {
+			w.Header().Set("Content-Type", "application/json")
 			http.Error(
 				w,
 				`{"status":"not_ready"}`,
@@ -207,6 +276,7 @@ func run() error {
 		}
 
 		if err := redisClient.Ping(r.Context()).Err(); err != nil {
+			w.Header().Set("Content-Type", "application/json")
 			http.Error(
 				w,
 				`{"status":"not_ready"}`,
@@ -256,8 +326,8 @@ func run() error {
 	case err := <-serverErr:
 		stop()
 
-		// Give the dispatcher a chance to stop before returning and
-		// closing PostgreSQL/Redis.
+		// The cancellation signal stops the dispatcher before its dependencies
+		// are closed.
 		dispatcherWG.Wait()
 
 		return fmt.Errorf("http server: %w", err)
