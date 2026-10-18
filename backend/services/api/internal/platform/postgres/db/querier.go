@@ -15,6 +15,8 @@ type Querier interface {
 	ClaimOutboxEvents(ctx context.Context, arg ClaimOutboxEventsParams) ([]ClaimOutboxEventsRow, error)
 	CompleteOrder(ctx context.Context, arg CompleteOrderParams) (Order, error)
 	CreateKDSTicket(ctx context.Context, arg CreateKDSTicketParams) (KdsTicket, error)
+	// The restaurant must belong to the authenticated tenant.
+	CreateMenuCategory(ctx context.Context, arg CreateMenuCategoryParams) (MenuCategory, error)
 	CreateOrder(ctx context.Context, arg CreateOrderParams) (Order, error)
 	CreateOrderItem(ctx context.Context, arg CreateOrderItemParams) (OrderItem, error)
 	CreateOutboxEvent(ctx context.Context, arg CreateOutboxEventParams) error
