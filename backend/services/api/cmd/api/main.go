@@ -15,6 +15,9 @@ import (
 	"time"
 
 	"github.com/afadnan/restaurantflow/services/api/internal/config"
+	menuhttp "github.com/afadnan/restaurantflow/services/api/internal/modules/menu/delivery/http"
+	menurepository "github.com/afadnan/restaurantflow/services/api/internal/modules/menu/repository"
+	menuusecase "github.com/afadnan/restaurantflow/services/api/internal/modules/menu/usecase"
 	httpdelivery "github.com/afadnan/restaurantflow/services/api/internal/modules/order/delivery/http"
 	"github.com/afadnan/restaurantflow/services/api/internal/modules/order/repository"
 	"github.com/afadnan/restaurantflow/services/api/internal/modules/order/usecase"
@@ -159,6 +162,12 @@ func run() error {
 	restaurantRepository := restaurantrepository.NewPostgresRestaurantRepository()
 
 	// -------------------------------------------------------------------------
+	// Menu repositories
+	// -------------------------------------------------------------------------
+
+	menuCategoryRepository := menurepository.NewPostgresCategoryRepository()
+
+	// -------------------------------------------------------------------------
 	// Order use cases
 	// -------------------------------------------------------------------------
 
@@ -214,6 +223,50 @@ func run() error {
 	}
 
 	// -------------------------------------------------------------------------
+	// Menu category use cases
+	// -------------------------------------------------------------------------
+
+	createCategoryUseCase := &menuusecase.CreateCategoryUseCase{
+		CategoryUseCaseDependencies: menuusecase.CategoryUseCaseDependencies{
+			DB:         db,
+			Categories: menuCategoryRepository,
+			Events:     eventRepository,
+			Clock:      menuusecase.SystemClock{},
+		},
+	}
+
+	getCategoryUseCase := &menuusecase.GetCategoryUseCase{
+		CategoryUseCaseDependencies: menuusecase.CategoryUseCaseDependencies{
+			DB:         db,
+			Categories: menuCategoryRepository,
+		},
+	}
+
+	listCategoriesUseCase := &menuusecase.ListCategoriesUseCase{
+		CategoryUseCaseDependencies: menuusecase.CategoryUseCaseDependencies{
+			DB:         db,
+			Categories: menuCategoryRepository,
+		},
+	}
+
+	updateCategoryUseCase := &menuusecase.UpdateCategoryUseCase{
+		CategoryUseCaseDependencies: menuusecase.CategoryUseCaseDependencies{
+			DB:         db,
+			Categories: menuCategoryRepository,
+			Events:     eventRepository,
+			Clock:      menuusecase.SystemClock{},
+		},
+	}
+
+	deactivateCategoryUseCase := &menuusecase.DeactivateCategoryUseCase{
+		CategoryUseCaseDependencies: menuusecase.CategoryUseCaseDependencies{
+			DB:         db,
+			Categories: menuCategoryRepository,
+			Events:     eventRepository,
+		},
+	}
+
+	// -------------------------------------------------------------------------
 	// HTTP handlers
 	// -------------------------------------------------------------------------
 
@@ -228,6 +281,14 @@ func run() error {
 		listRestaurantsUseCase,
 		updateRestaurantUseCase,
 		deactivateRestaurantUseCase,
+	)
+
+	menuCategoryHandler := menuhttp.NewCategoryHandler(
+		createCategoryUseCase,
+		getCategoryUseCase,
+		listCategoriesUseCase,
+		updateCategoryUseCase,
+		deactivateCategoryUseCase,
 	)
 
 	// -------------------------------------------------------------------------
@@ -245,6 +306,10 @@ func run() error {
 	httprestaurant.RegisterRoutes(
 		mux,
 		restaurantHandler,
+	)
+	menuhttp.RegisterCategoryRoutes(
+		mux,
+		menuCategoryHandler,
 	)
 
 	// -------------------------------------------------------------------------

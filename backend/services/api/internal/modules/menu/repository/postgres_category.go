@@ -88,7 +88,7 @@ func (r *PostgresCategoryRepository) GetByID(
 		db.GetMenuCategoryByIDParams{
 			TenantID:     uuidToPgUUID(tenantID),
 			RestaurantID: uuidToPgUUID(restaurantID),
-			ID:           uuidToPgUUID(categoryID),
+			CategoryID:   uuidToPgUUID(categoryID),
 		},
 	)
 	if err != nil {
@@ -138,8 +138,8 @@ func (r *PostgresCategoryRepository) List(
 		db.ListMenuCategoriesParams{
 			TenantID:     uuidToPgUUID(tenantID),
 			RestaurantID: uuidToPgUUID(restaurantID),
-			Limit:        int32(limit),
-			Offset:       int32(offset),
+			QueryLimit:   int32(limit),
+			QueryOffset:  int32(offset),
 		},
 	)
 	if err != nil {
@@ -185,7 +185,7 @@ func (r *PostgresCategoryRepository) Update(
 		db.UpdateMenuCategoryParams{
 			TenantID:     uuidToPgUUID(category.TenantID),
 			RestaurantID: uuidToPgUUID(category.RestaurantID),
-			ID:           uuidToPgUUID(category.ID),
+			CategoryID:   uuidToPgUUID(category.ID),
 			Name:         category.Name,
 			Description:  textToPgText(category.Description),
 			SortOrder:    category.SortOrder,
@@ -222,7 +222,7 @@ func (r *PostgresCategoryRepository) Deactivate(
 		db.DeactivateMenuCategoryParams{
 			TenantID:     uuidToPgUUID(tenantID),
 			RestaurantID: uuidToPgUUID(restaurantID),
-			ID:           uuidToPgUUID(categoryID),
+			CategoryID:   uuidToPgUUID(categoryID),
 		},
 	)
 	if err != nil {
