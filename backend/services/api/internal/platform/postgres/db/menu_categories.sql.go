@@ -51,7 +51,7 @@ type CreateMenuCategoryParams struct {
 	RestaurantID pgtype.UUID `json:"restaurant_id"`
 }
 
-// The restaurant must belong to the authenticated tenant.
+// Create a category only when the restaurant belongs to the tenant.
 func (q *Queries) CreateMenuCategory(ctx context.Context, arg CreateMenuCategoryParams) (MenuCategory, error) {
 	row := q.db.QueryRow(ctx, createMenuCategory,
 		arg.CategoryID,
@@ -60,6 +60,202 @@ func (q *Queries) CreateMenuCategory(ctx context.Context, arg CreateMenuCategory
 		arg.SortOrder,
 		arg.TenantID,
 		arg.RestaurantID,
+	)
+	var i MenuCategory
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.RestaurantID,
+		&i.Name,
+		&i.Description,
+		&i.SortOrder,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const deactivateMenuCategory = `-- name: DeactivateMenuCategory :one
+UPDATE menu_categories
+SET is_active = false
+WHERE tenant_id = $1::uuid
+  AND restaurant_id = $2::uuid
+  AND id = $3::uuid
+RETURNING
+    id,
+    tenant_id,
+    restaurant_id,
+    name,
+    description,
+    sort_order,
+    is_active,
+    created_at,
+    updated_at
+`
+
+type DeactivateMenuCategoryParams struct {
+	TenantID     pgtype.UUID `json:"tenant_id"`
+	RestaurantID pgtype.UUID `json:"restaurant_id"`
+	CategoryID   pgtype.UUID `json:"category_id"`
+}
+
+func (q *Queries) DeactivateMenuCategory(ctx context.Context, arg DeactivateMenuCategoryParams) (MenuCategory, error) {
+	row := q.db.QueryRow(ctx, deactivateMenuCategory, arg.TenantID, arg.RestaurantID, arg.CategoryID)
+	var i MenuCategory
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.RestaurantID,
+		&i.Name,
+		&i.Description,
+		&i.SortOrder,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getMenuCategoryByID = `-- name: GetMenuCategoryByID :one
+SELECT
+    id,
+    tenant_id,
+    restaurant_id,
+    name,
+    description,
+    sort_order,
+    is_active,
+    created_at,
+    updated_at
+FROM menu_categories
+WHERE tenant_id = $1::uuid
+  AND restaurant_id = $2::uuid
+  AND id = $3::uuid
+`
+
+type GetMenuCategoryByIDParams struct {
+	TenantID     pgtype.UUID `json:"tenant_id"`
+	RestaurantID pgtype.UUID `json:"restaurant_id"`
+	CategoryID   pgtype.UUID `json:"category_id"`
+}
+
+func (q *Queries) GetMenuCategoryByID(ctx context.Context, arg GetMenuCategoryByIDParams) (MenuCategory, error) {
+	row := q.db.QueryRow(ctx, getMenuCategoryByID, arg.TenantID, arg.RestaurantID, arg.CategoryID)
+	var i MenuCategory
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.RestaurantID,
+		&i.Name,
+		&i.Description,
+		&i.SortOrder,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const listMenuCategories = `-- name: ListMenuCategories :many
+SELECT
+    id,
+    tenant_id,
+    restaurant_id,
+    name,
+    description,
+    sort_order,
+    is_active,
+    created_at,
+    updated_at
+FROM menu_categories
+WHERE tenant_id = $1::uuid
+  AND restaurant_id = $2::uuid
+ORDER BY sort_order ASC, created_at ASC, id ASC
+LIMIT $4::integer
+OFFSET $3::integer
+`
+
+type ListMenuCategoriesParams struct {
+	TenantID     pgtype.UUID `json:"tenant_id"`
+	RestaurantID pgtype.UUID `json:"restaurant_id"`
+	QueryOffset  int32       `json:"query_offset"`
+	QueryLimit   int32       `json:"query_limit"`
+}
+
+func (q *Queries) ListMenuCategories(ctx context.Context, arg ListMenuCategoriesParams) ([]MenuCategory, error) {
+	rows, err := q.db.Query(ctx, listMenuCategories,
+		arg.TenantID,
+		arg.RestaurantID,
+		arg.QueryOffset,
+		arg.QueryLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MenuCategory
+	for rows.Next() {
+		var i MenuCategory
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.RestaurantID,
+			&i.Name,
+			&i.Description,
+			&i.SortOrder,
+			&i.IsActive,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const updateMenuCategory = `-- name: UpdateMenuCategory :one
+UPDATE menu_categories
+SET
+    name = $1::text,
+    description = $2::text,
+    sort_order = $3::integer
+WHERE tenant_id = $4::uuid
+  AND restaurant_id = $5::uuid
+  AND id = $6::uuid
+RETURNING
+    id,
+    tenant_id,
+    restaurant_id,
+    name,
+    description,
+    sort_order,
+    is_active,
+    created_at,
+    updated_at
+`
+
+type UpdateMenuCategoryParams struct {
+	Name         string      `json:"name"`
+	Description  pgtype.Text `json:"description"`
+	SortOrder    int32       `json:"sort_order"`
+	TenantID     pgtype.UUID `json:"tenant_id"`
+	RestaurantID pgtype.UUID `json:"restaurant_id"`
+	CategoryID   pgtype.UUID `json:"category_id"`
+}
+
+func (q *Queries) UpdateMenuCategory(ctx context.Context, arg UpdateMenuCategoryParams) (MenuCategory, error) {
+	row := q.db.QueryRow(ctx, updateMenuCategory,
+		arg.Name,
+		arg.Description,
+		arg.SortOrder,
+		arg.TenantID,
+		arg.RestaurantID,
+		arg.CategoryID,
 	)
 	var i MenuCategory
 	err := row.Scan(
