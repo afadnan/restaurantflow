@@ -1,6 +1,7 @@
 
 -- name: CreateMenuItem :one
 INSERT INTO menu_items (
+    id,
     tenant_id,
     restaurant_id,
     category_id,
@@ -16,6 +17,7 @@ INSERT INTO menu_items (
     is_available
 )
 SELECT
+    sqlc.arg(item_id)::uuid,
     sqlc.arg(tenant_id)::uuid,
     sqlc.arg(restaurant_id)::uuid,
     c.id,

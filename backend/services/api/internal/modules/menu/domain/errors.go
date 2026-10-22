@@ -15,4 +15,6 @@ var (
 	ErrInvalidItemStatus    = errors.New("invalid menu item status")
 	ErrInvalidItemInput     = errors.New("invalid menu item input")
 	ErrInvalidItemPrice     = errors.New("menu item price must be a non-negative decimal with at most two decimal places")
+
+	ErrItemNotFound = errors.New("menu item not found")
 )
