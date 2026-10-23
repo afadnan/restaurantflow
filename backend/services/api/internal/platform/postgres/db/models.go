@@ -571,6 +571,18 @@ type MenuItemIngredient struct {
 	QuantityRequired pgtype.Numeric `json:"quantity_required"`
 }
 
+type MenuItemVariant struct {
+	ID           pgtype.UUID        `json:"id"`
+	TenantID     pgtype.UUID        `json:"tenant_id"`
+	RestaurantID pgtype.UUID        `json:"restaurant_id"`
+	MenuItemID   pgtype.UUID        `json:"menu_item_id"`
+	Name         string             `json:"name"`
+	PriceDelta   pgtype.Numeric     `json:"price_delta"`
+	IsActive     bool               `json:"is_active"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Order struct {
 	ID             pgtype.UUID        `json:"id"`
 	TenantID       pgtype.UUID        `json:"tenant_id"`
