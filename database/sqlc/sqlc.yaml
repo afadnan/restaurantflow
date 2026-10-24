@@ -8,7 +8,9 @@ sql:
     queries: "../queries/"
 
     gen:
+
       go:
+      
         package: db
         out: "../../backend/services/api/internal/platform/postgres/db"
         sql_package: pgx/v5
