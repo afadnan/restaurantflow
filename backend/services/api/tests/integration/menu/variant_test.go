@@ -321,3 +321,45 @@ func TestIntegrationMenuItemVariantCreateRollsBackWhenOutboxFails(t *testing.T) 
 	require.NoError(t, err)
 	require.Zero(t, count, fmt.Sprintf("variant persisted after outbox failure"))
 }
+
+func TestIntegrationMenuDatabaseRoleEnforcesRLS(t *testing.T) {
+	integration := newVariantIntegration(t)
+
+	ctx, cancel := context.WithTimeout(
+		context.Background(),
+		10*time.Second,
+	)
+	defer cancel()
+
+	var currentUser string
+	var isSuperuser bool
+	var bypassRLS bool
+
+	err := integration.pool.QueryRow(ctx, `
+		SELECT
+			current_user,
+			r.rolsuper,
+			r.rolbypassrls
+		FROM pg_roles r
+		WHERE r.rolname = current_user
+	`).Scan(
+		&currentUser,
+		&isSuperuser,
+		&bypassRLS,
+	)
+	require.NoError(t, err)
+
+	require.Equal(t, "restaurantflow_app", currentUser)
+	require.False(t, isSuperuser)
+	require.False(t, bypassRLS)
+
+	var ownsMenuCategories bool
+
+	err = integration.pool.QueryRow(ctx, `
+		SELECT pg_get_userbyid(c.relowner) = current_user
+		FROM pg_class c
+		WHERE c.oid = 'public.menu_categories'::regclass
+	`).Scan(&ownsMenuCategories)
+	require.NoError(t, err)
+	require.False(t, ownsMenuCategories)
+}
