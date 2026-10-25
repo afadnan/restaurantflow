@@ -184,10 +184,12 @@ vendor/
 
 
 
+# Never commit real environment configuration
+.env
 .env.*
 
+# Allow safe configuration templates
 !.env.example
-
 !.env.template
 
 
