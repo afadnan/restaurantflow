@@ -17,4 +17,16 @@ var (
 	ErrInvalidItemPrice     = errors.New("menu item price must be a non-negative decimal with at most two decimal places")
 
 	ErrItemNotFound = errors.New("menu item not found")
+
+	// addon errors
+	ErrInvalidAddonID          = errors.New("invalid menu addon id")
+	ErrInvalidAddonName        = errors.New("menu addon name must be between 1 and 200 characters")
+	ErrInvalidAddonPrice       = errors.New("menu addon price must be a non-negative decimal with at most two decimal places")
+	ErrInvalidAddonInput       = errors.New("invalid menu addon input")
+	ErrAddonNotFound           = errors.New("menu addon not found")
+	ErrAddonInactive           = errors.New("menu addon is inactive")
+	ErrInvalidAddonMaxQuantity = errors.New("menu addon max quantity must be greater than zero")
+	ErrInvalidItemAddonInput   = errors.New("invalid menu item addon input")
+	ErrItemAddonNotFound       = errors.New("menu item addon association not found")
+	ErrItemAddonAlreadyExists  = errors.New("menu item addon association already exists")
 )
