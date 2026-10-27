@@ -557,11 +557,12 @@ type MenuItem struct {
 }
 
 type MenuItemAddon struct {
-	TenantID    pgtype.UUID `json:"tenant_id"`
-	MenuItemID  pgtype.UUID `json:"menu_item_id"`
-	AddonID     pgtype.UUID `json:"addon_id"`
-	IsRequired  bool        `json:"is_required"`
-	MaxQuantity int32       `json:"max_quantity"`
+	TenantID     pgtype.UUID `json:"tenant_id"`
+	MenuItemID   pgtype.UUID `json:"menu_item_id"`
+	AddonID      pgtype.UUID `json:"addon_id"`
+	IsRequired   bool        `json:"is_required"`
+	MaxQuantity  int32       `json:"max_quantity"`
+	RestaurantID pgtype.UUID `json:"restaurant_id"`
 }
 
 type MenuItemIngredient struct {
