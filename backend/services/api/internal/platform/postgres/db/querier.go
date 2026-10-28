@@ -27,6 +27,7 @@ type Querier interface {
 	CreateOrderItem(ctx context.Context, arg CreateOrderItemParams) (OrderItem, error)
 	CreateOutboxEvent(ctx context.Context, arg CreateOutboxEventParams) error
 	CreateRestaurant(ctx context.Context, arg CreateRestaurantParams) (Restaurant, error)
+	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeactivateMenuAddon(ctx context.Context, arg DeactivateMenuAddonParams) (DeactivateMenuAddonRow, error)
 	DeactivateMenuCategory(ctx context.Context, arg DeactivateMenuCategoryParams) (MenuCategory, error)
 	DeactivateMenuItem(ctx context.Context, arg DeactivateMenuItemParams) (DeactivateMenuItemRow, error)
@@ -45,6 +46,8 @@ type Querier interface {
 	GetOrderItemByID(ctx context.Context, arg GetOrderItemByIDParams) (OrderItem, error)
 	GetRestaurantByID(ctx context.Context, arg GetRestaurantByIDParams) (Restaurant, error)
 	GetRestaurantBySlug(ctx context.Context, arg GetRestaurantBySlugParams) (Restaurant, error)
+	GetUserByEmail(ctx context.Context, arg GetUserByEmailParams) (User, error)
+	GetUserByID(ctx context.Context, arg GetUserByIDParams) (User, error)
 	ListKDSQueue(ctx context.Context, arg ListKDSQueueParams) ([]KdsTicket, error)
 	ListMenuAddons(ctx context.Context, arg ListMenuAddonsParams) ([]ListMenuAddonsRow, error)
 	ListMenuCategories(ctx context.Context, arg ListMenuCategoriesParams) ([]MenuCategory, error)
@@ -66,6 +69,7 @@ type Querier interface {
 	UpdateOrderPaymentStatus(ctx context.Context, arg UpdateOrderPaymentStatusParams) (Order, error)
 	UpdateOrderStatus(ctx context.Context, arg UpdateOrderStatusParams) (Order, error)
 	UpdateRestaurant(ctx context.Context, arg UpdateRestaurantParams) (Restaurant, error)
+	UpdateUserLastLogin(ctx context.Context, arg UpdateUserLastLoginParams) (User, error)
 }
 
 var _ Querier = (*Queries)(nil)
