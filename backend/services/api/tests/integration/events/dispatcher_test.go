@@ -59,6 +59,23 @@ func newDispatcherIntegrationDB(t *testing.T) *dispatcherIntegrationDB {
 	cfg, err := config.Load()
 	require.NoError(t, err)
 
+	outboxTestDatabaseName := os.Getenv("OUTBOX_TEST_DATABASE_NAME")
+
+	require.NotEmpty(
+		t,
+		outboxTestDatabaseName,
+		"OUTBOX_TEST_DATABASE_NAME is required",
+	)
+
+	require.NotEqual(
+		t,
+		cfg.Database.Name,
+		outboxTestDatabaseName,
+		"Outbox integration tests must use a separate database",
+	)
+
+	cfg.Database.Name = outboxTestDatabaseName
+
 	// Application runtime connection.
 	appPool, err := database.NewPostgresPool(ctx, cfg.Database)
 	require.NoError(t, err)
@@ -107,15 +124,40 @@ func resetOutboxEvents(t *testing.T, pool *pgxpool.Pool) {
 		t.Fatal("refusing to reset outbox_events outside integration tests")
 	}
 
+	expectedDatabase := os.Getenv("OUTBOX_TEST_DATABASE_NAME")
+
+	if expectedDatabase != "restaurantflow_outbox_test" {
+		t.Fatalf(
+			"refusing destructive cleanup: unexpected Outbox test database %q",
+			expectedDatabase,
+		)
+	}
+
 	ctx, cancel := context.WithTimeout(
 		context.Background(),
 		5*time.Second,
 	)
 	defer cancel()
 
-	_, err := pool.Exec(
+	var actualDatabase string
+
+	err := pool.QueryRow(
 		ctx,
-		`TRUNCATE TABLE outbox_events`,
+		`SELECT current_database()`,
+	).Scan(&actualDatabase)
+
+	require.NoError(t, err)
+
+	require.Equal(
+		t,
+		expectedDatabase,
+		actualDatabase,
+		"refusing destructive cleanup on unexpected database",
+	)
+
+	_, err = pool.Exec(
+		ctx,
+		`TRUNCATE TABLE public.outbox_events`,
 	)
 
 	require.NoError(t, err)
