@@ -166,6 +166,70 @@ func run() error {
 	// -------------------------------------------------------------------------
 
 	menuCategoryRepository := menurepository.NewPostgresCategoryRepository()
+	menuItemRepository := menurepository.NewPostgresItemRepository()
+	menuAddonRepository := menurepository.NewPostgresAddonRepository()
+	menuItemAddonRepository := menurepository.NewPostgresItemAddonRepository()
+	// -------------------------------------------------------------------------
+	// Menu Add-on use cases
+	// -------------------------------------------------------------------------
+
+	addonDependencies := menuusecase.AddonUseCaseDependencies{
+		DB:     db,
+		Addons: menuAddonRepository,
+		Events: eventRepository,
+		Clock:  menuusecase.SystemClock{},
+	}
+
+	createAddonUseCase := &menuusecase.CreateAddonUseCase{
+		AddonUseCaseDependencies: addonDependencies,
+	}
+
+	getAddonUseCase := &menuusecase.GetAddonUseCase{
+		AddonUseCaseDependencies: addonDependencies,
+	}
+
+	listAddonsUseCase := &menuusecase.ListAddonsUseCase{
+		AddonUseCaseDependencies: addonDependencies,
+	}
+
+	updateAddonUseCase := &menuusecase.UpdateAddonUseCase{
+		AddonUseCaseDependencies: addonDependencies,
+	}
+
+	deactivateAddonUseCase := &menuusecase.DeactivateAddonUseCase{
+		AddonUseCaseDependencies: addonDependencies,
+	}
+
+	// -------------------------------------------------------------------------
+	// Menu Item–Add-on use cases
+	// -------------------------------------------------------------------------
+
+	itemAddonDependencies := menuusecase.ItemAddonUseCaseDependencies{
+		DB:         db,
+		ItemAddons: menuItemAddonRepository,
+		Events:     eventRepository,
+		Clock:      menuusecase.SystemClock{},
+	}
+
+	attachItemAddonUseCase := &menuusecase.AttachItemAddonUseCase{
+		ItemAddonUseCaseDependencies: itemAddonDependencies,
+	}
+
+	getItemAddonUseCase := &menuusecase.GetItemAddonUseCase{
+		ItemAddonUseCaseDependencies: itemAddonDependencies,
+	}
+
+	listItemAddonsUseCase := &menuusecase.ListItemAddonsUseCase{
+		ItemAddonUseCaseDependencies: itemAddonDependencies,
+	}
+
+	updateItemAddonUseCase := &menuusecase.UpdateItemAddonUseCase{
+		ItemAddonUseCaseDependencies: itemAddonDependencies,
+	}
+
+	detachItemAddonUseCase := &menuusecase.DetachItemAddonUseCase{
+		ItemAddonUseCaseDependencies: itemAddonDependencies,
+	}
 
 	// -------------------------------------------------------------------------
 	// Order use cases
@@ -267,6 +331,37 @@ func run() error {
 	}
 
 	// -------------------------------------------------------------------------
+	// Menu Item use cases
+	// -------------------------------------------------------------------------
+
+	itemDependencies := menuusecase.ItemUseCaseDependencies{
+		DB:     db,
+		Items:  menuItemRepository,
+		Events: eventRepository,
+		Clock:  menuusecase.SystemClock{},
+	}
+
+	createItemUseCase := &menuusecase.CreateItemUseCase{
+		ItemUseCaseDependencies: itemDependencies,
+	}
+
+	getItemUseCase := &menuusecase.GetItemUseCase{
+		ItemUseCaseDependencies: itemDependencies,
+	}
+
+	listItemsUseCase := &menuusecase.ListItemsUseCase{
+		ItemUseCaseDependencies: itemDependencies,
+	}
+
+	updateItemUseCase := &menuusecase.UpdateItemUseCase{
+		ItemUseCaseDependencies: itemDependencies,
+	}
+
+	deactivateItemUseCase := &menuusecase.DeactivateItemUseCase{
+		ItemUseCaseDependencies: itemDependencies,
+	}
+
+	// -------------------------------------------------------------------------
 	// HTTP handlers
 	// -------------------------------------------------------------------------
 
@@ -291,25 +386,75 @@ func run() error {
 		deactivateCategoryUseCase,
 	)
 
+	menuItemHandler := menuhttp.NewItemHandler(
+		createItemUseCase,
+		getItemUseCase,
+		listItemsUseCase,
+		updateItemUseCase,
+		deactivateItemUseCase,
+	)
+
+	// -------------------------------------------------------------------------
+	// Menu Add-on HTTP handler
+	// -------------------------------------------------------------------------
+
+	menuAddonHandler := menuhttp.NewAddonHandler(
+		createAddonUseCase,
+		getAddonUseCase,
+		listAddonsUseCase,
+		updateAddonUseCase,
+		deactivateAddonUseCase,
+	)
+
+	menuItemAddonHandler := menuhttp.NewItemAddonHandler(
+		attachItemAddonUseCase,
+		getItemAddonUseCase,
+		listItemAddonsUseCase,
+		updateItemAddonUseCase,
+		detachItemAddonUseCase,
+	)
+
 	// -------------------------------------------------------------------------
 	// HTTP routes
 	// -------------------------------------------------------------------------
 
 	mux := http.NewServeMux()
 
+	// Order routes
 	httpdelivery.RegisterRoutes(
 		mux,
 		orderHandler,
 		nil,
 	)
 
+	// Restaurant routes
 	httprestaurant.RegisterRoutes(
 		mux,
 		restaurantHandler,
 	)
+
+	// Menu Category routes
 	menuhttp.RegisterCategoryRoutes(
 		mux,
 		menuCategoryHandler,
+	)
+
+	// Menu Item routes
+	menuhttp.RegisterItemRoutes(
+		mux,
+		menuItemHandler,
+	)
+
+	// Menu Add-on routes
+	menuhttp.RegisterAddonRoutes(
+		mux,
+		menuAddonHandler,
+	)
+
+	// Menu Item–Add-on routes
+	menuhttp.RegisterItemAddonRoutes(
+		mux,
+		menuItemAddonHandler,
 	)
 
 	// -------------------------------------------------------------------------

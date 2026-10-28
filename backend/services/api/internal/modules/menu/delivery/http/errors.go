@@ -19,13 +19,34 @@ func writeDomainError(w http.ResponseWriter, err error) {
 		errors.Is(err, domain.ErrInvalidCategoryName),
 		errors.Is(err, domain.ErrInvalidSortOrder),
 		errors.Is(err, domain.ErrInvalidCategoryInput),
+		errors.Is(err, domain.ErrInvalidItemID),
+		errors.Is(err, domain.ErrInvalidItemName),
+		errors.Is(err, domain.ErrInvalidItemStatus),
+		errors.Is(err, domain.ErrInvalidItemInput),
+		errors.Is(err, domain.ErrInvalidItemPrice),
+		errors.Is(err, domain.ErrInvalidAddonID),
+		errors.Is(err, domain.ErrInvalidAddonName),
+		errors.Is(err, domain.ErrInvalidAddonPrice),
+		errors.Is(err, domain.ErrInvalidAddonInput),
+		errors.Is(err, domain.ErrInvalidAddonMaxQuantity),
+		errors.Is(err, domain.ErrInvalidItemAddonInput),
 		errors.Is(err, usecase.ErrInvalidPagination):
 		http.Error(w, err.Error(), http.StatusBadRequest)
 
-	case errors.Is(err, domain.ErrCategoryNotFound):
+	case errors.Is(err, domain.ErrCategoryNotFound),
+		errors.Is(err, domain.ErrItemNotFound),
+		errors.Is(err, domain.ErrAddonNotFound),
+		errors.Is(err, domain.ErrItemAddonNotFound):
 		http.Error(w, err.Error(), http.StatusNotFound)
 
-	case errors.Is(err, usecase.ErrUseCaseNotConfigured):
+	case errors.Is(err, domain.ErrAddonInactive),
+		errors.Is(err, domain.ErrItemAddonAlreadyExists):
+		http.Error(w, err.Error(), http.StatusConflict)
+
+	case errors.Is(err, usecase.ErrUseCaseNotConfigured),
+		errors.Is(err, usecase.ErrItemUseCaseNotConfigured),
+		errors.Is(err, usecase.ErrAddonUseCaseNotConfigured),
+		errors.Is(err, usecase.ErrItemAddonUseCaseNotConfigured):
 		http.Error(
 			w,
 			http.StatusText(http.StatusInternalServerError),
