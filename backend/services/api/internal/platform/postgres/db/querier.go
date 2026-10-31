@@ -27,6 +27,7 @@ type Querier interface {
 	CreateOrderItem(ctx context.Context, arg CreateOrderItemParams) (OrderItem, error)
 	CreateOutboxEvent(ctx context.Context, arg CreateOutboxEventParams) error
 	CreateRestaurant(ctx context.Context, arg CreateRestaurantParams) (Restaurant, error)
+	CreateTenant(ctx context.Context, arg CreateTenantParams) (Tenant, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeactivateMenuAddon(ctx context.Context, arg DeactivateMenuAddonParams) (DeactivateMenuAddonRow, error)
 	DeactivateMenuCategory(ctx context.Context, arg DeactivateMenuCategoryParams) (MenuCategory, error)
