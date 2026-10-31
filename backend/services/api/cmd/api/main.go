@@ -24,6 +24,10 @@ import (
 	httprestaurant "github.com/afadnan/restaurantflow/services/api/internal/modules/restaurant/delivery/http"
 	restaurantrepository "github.com/afadnan/restaurantflow/services/api/internal/modules/restaurant/repository"
 	restaurantusecase "github.com/afadnan/restaurantflow/services/api/internal/modules/restaurant/usecase"
+	tenantrepository "github.com/afadnan/restaurantflow/services/api/internal/modules/tenant/repository"
+	userhttp "github.com/afadnan/restaurantflow/services/api/internal/modules/user/delivery/http"
+	userrepository "github.com/afadnan/restaurantflow/services/api/internal/modules/user/repository"
+	userusecase "github.com/afadnan/restaurantflow/services/api/internal/modules/user/usecase"
 	"github.com/afadnan/restaurantflow/services/api/internal/platform/database"
 	"github.com/afadnan/restaurantflow/services/api/internal/platform/events"
 	"github.com/afadnan/restaurantflow/services/api/internal/platform/postgres"
@@ -395,6 +399,23 @@ func run() error {
 	)
 
 	// -------------------------------------------------------------------------
+	// Owner Registration repositories and use case
+	// -------------------------------------------------------------------------
+
+	tenantRepository := tenantrepository.NewPostgresTenantRepository()
+	userRepository := userrepository.NewPostgresUserRepository()
+
+	registerOwnerUseCase := &userusecase.RegisterOwnerUseCase{
+		DB:      db,
+		Tenants: tenantRepository,
+		Users:   userRepository,
+	}
+
+	ownerRegistrationHandler := userhttp.NewOwnerRegistrationHandler(
+		registerOwnerUseCase,
+	)
+
+	// -------------------------------------------------------------------------
 	// Menu Add-on HTTP handler
 	// -------------------------------------------------------------------------
 
@@ -419,6 +440,16 @@ func run() error {
 	// -------------------------------------------------------------------------
 
 	mux := http.NewServeMux()
+
+	// -------------------------------------------------------------------------
+	// Public Owner Registration routes
+	// -------------------------------------------------------------------------
+
+	// No TenantMiddleware: the tenant is created during registration.
+	userhttp.RegisterRoutes(
+		mux,
+		ownerRegistrationHandler,
+	)
 
 	// Order routes
 	httpdelivery.RegisterRoutes(
