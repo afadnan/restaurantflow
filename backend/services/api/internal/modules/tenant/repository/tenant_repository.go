@@ -10,7 +10,9 @@ import (
 
 var (
 	ErrTenantSlugExists = errors.New("tenant slug already exists")
+	ErrTenantNotFound   = errors.New("tenant not found")
 	ErrInvalidTx        = errors.New("invalid database transaction")
+	ErrInvalidDatabase  = errors.New("invalid database connection")
 )
 
 type TenantRepository interface {
@@ -19,4 +21,10 @@ type TenantRepository interface {
 		tx *postgres.Tx,
 		tenant *domain.Tenant,
 	) error
+
+	GetBySlug(
+		ctx context.Context,
+		database *postgres.DB,
+		slug string,
+	) (*domain.Tenant, error)
 }

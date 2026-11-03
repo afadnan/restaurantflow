@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -26,6 +29,10 @@ func (r *PostgresTenantRepository) Create(
 ) error {
 	if tx == nil {
 		return ErrInvalidTx
+	}
+
+	if tenant == nil {
+		return errors.New("tenant is required")
 	}
 
 	if err := tenant.Validate(); err != nil {
@@ -59,6 +66,48 @@ func (r *PostgresTenantRepository) Create(
 	tenant.Status = row.Status
 
 	return nil
+}
+
+func (r *PostgresTenantRepository) GetBySlug(
+	ctx context.Context,
+	database *postgres.DB,
+	slug string,
+) (*domain.Tenant, error) {
+	if database == nil || database.Pool == nil {
+		return nil, ErrInvalidDatabase
+	}
+
+	slug = strings.ToLower(strings.TrimSpace(slug))
+
+	if len(slug) < 3 || len(slug) > 100 {
+		return nil, domain.ErrInvalidTenantSlug
+	}
+
+	q := db.New(database.Pool)
+
+	row, err := q.GetTenantBySlug(ctx, slug)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrTenantNotFound
+		}
+
+		return nil, fmt.Errorf("get tenant by slug: %w", err)
+	}
+
+	tenant := &domain.Tenant{
+		ID:        uuid.UUID(row.ID.Bytes),
+		Name:      row.Name,
+		Slug:      row.Slug,
+		Status:    row.Status,
+		CreatedAt: row.CreatedAt.Time,
+		UpdatedAt: row.UpdatedAt.Time,
+	}
+
+	if err := tenant.Validate(); err != nil {
+		return nil, fmt.Errorf("map tenant: %w", err)
+	}
+
+	return tenant, nil
 }
 
 var _ TenantRepository = (*PostgresTenantRepository)(nil)
