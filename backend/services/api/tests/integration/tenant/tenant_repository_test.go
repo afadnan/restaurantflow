@@ -3,6 +3,7 @@ package tenant_test
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -46,7 +47,8 @@ func TestIntegrationTenantRepository(t *testing.T) {
 
 	t.Run("create tenant", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(
-			context.Background(), 10*time.Second,
+			context.Background(),
+			10*time.Second,
 		)
 		defer cancel()
 
@@ -58,7 +60,9 @@ func TestIntegrationTenantRepository(t *testing.T) {
 
 		tx, err := i.BeginTx(ctx, tenant.ID)
 		require.NoError(t, err)
-		defer func() { _ = tx.Rollback(context.Background()) }()
+		defer func() {
+			_ = tx.Rollback(context.Background())
+		}()
 
 		require.NoError(t, repo.Create(ctx, tx, tenant))
 		require.Equal(t, "active", tenant.Status)
@@ -66,11 +70,13 @@ func TestIntegrationTenantRepository(t *testing.T) {
 		require.False(t, tenant.UpdatedAt.IsZero())
 
 		var count int
+
 		err = tx.Raw().QueryRow(
 			ctx,
 			"SELECT COUNT(*) FROM tenants WHERE id = $1",
 			tenant.ID,
 		).Scan(&count)
+
 		require.NoError(t, err)
 		require.Equal(t, 1, count)
 
@@ -79,7 +85,8 @@ func TestIntegrationTenantRepository(t *testing.T) {
 
 	t.Run("duplicate slug rejected", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(
-			context.Background(), 10*time.Second,
+			context.Background(),
+			10*time.Second,
 		)
 		defer cancel()
 
@@ -93,7 +100,9 @@ func TestIntegrationTenantRepository(t *testing.T) {
 
 		tx, err := i.BeginTx(ctx, first.ID)
 		require.NoError(t, err)
-		defer func() { _ = tx.Rollback(context.Background()) }()
+		defer func() {
+			_ = tx.Rollback(context.Background())
+		}()
 
 		require.NoError(t, repo.Create(ctx, tx, first))
 
@@ -107,7 +116,8 @@ func TestIntegrationTenantRepository(t *testing.T) {
 		require.ErrorIs(t, err, repository.ErrTenantSlugExists)
 
 		_, err = tx.Raw().Exec(
-			ctx, "ROLLBACK TO SAVEPOINT duplicate_slug",
+			ctx,
+			"ROLLBACK TO SAVEPOINT duplicate_slug",
 		)
 		require.NoError(t, err)
 
@@ -116,7 +126,8 @@ func TestIntegrationTenantRepository(t *testing.T) {
 
 	t.Run("transaction rollback", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(
-			context.Background(), 10*time.Second,
+			context.Background(),
+			10*time.Second,
 		)
 		defer cancel()
 
@@ -128,12 +139,15 @@ func TestIntegrationTenantRepository(t *testing.T) {
 
 		tx, err := i.BeginTx(ctx, tenant.ID)
 		require.NoError(t, err)
-		defer func() { _ = tx.Rollback(context.Background()) }()
+		defer func() {
+			_ = tx.Rollback(context.Background())
+		}()
 
 		require.NoError(t, repo.Create(ctx, tx, tenant))
 		require.NoError(t, tx.Rollback(ctx))
 
 		var count int
+
 		err = i.Pool.QueryRow(
 			ctx,
 			"SELECT COUNT(*) FROM tenants WHERE id = $1",
@@ -142,5 +156,86 @@ func TestIntegrationTenantRepository(t *testing.T) {
 
 		require.NoError(t, err)
 		require.Zero(t, count)
+	})
+
+	t.Run("get tenant by slug", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(
+			context.Background(),
+			10*time.Second,
+		)
+		defer cancel()
+
+		tenant, err := domain.NewTenant(
+			"Lookup Integration Restaurant",
+			"tenant-lookup-"+uuid.NewString(),
+		)
+		require.NoError(t, err)
+
+		tx, err := i.BeginTx(ctx, tenant.ID)
+		require.NoError(t, err)
+		defer func() {
+			_ = tx.Rollback(context.Background())
+		}()
+
+		require.NoError(t, repo.Create(ctx, tx, tenant))
+		require.NoError(t, tx.Commit(ctx))
+
+		found, err := repo.GetBySlug(ctx, i, tenant.Slug)
+
+		require.NoError(t, err)
+		require.Equal(t, tenant.ID, found.ID)
+		require.Equal(t, tenant.Name, found.Name)
+		require.Equal(t, tenant.Slug, found.Slug)
+		require.Equal(t, tenant.Status, found.Status)
+	})
+
+	t.Run("get tenant by normalized slug", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(
+			context.Background(),
+			10*time.Second,
+		)
+		defer cancel()
+
+		tenant, err := domain.NewTenant(
+			"Normalized Lookup Restaurant",
+			"tenant-normalized-"+uuid.NewString(),
+		)
+		require.NoError(t, err)
+
+		tx, err := i.BeginTx(ctx, tenant.ID)
+		require.NoError(t, err)
+		defer func() {
+			_ = tx.Rollback(context.Background())
+		}()
+
+		require.NoError(t, repo.Create(ctx, tx, tenant))
+		require.NoError(t, tx.Commit(ctx))
+
+		found, err := repo.GetBySlug(
+			ctx,
+			i,
+			"  "+strings.ToUpper(tenant.Slug)+"  ",
+		)
+
+		require.NoError(t, err)
+		require.Equal(t, tenant.ID, found.ID)
+		require.Equal(t, tenant.Name, found.Name)
+		require.Equal(t, tenant.Slug, found.Slug)
+	})
+
+	t.Run("unknown slug returns not found", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(
+			context.Background(),
+			10*time.Second,
+		)
+		defer cancel()
+
+		_, err := repo.GetBySlug(
+			ctx,
+			i,
+			"tenant-missing-"+uuid.NewString(),
+		)
+
+		require.ErrorIs(t, err, repository.ErrTenantNotFound)
 	})
 }
