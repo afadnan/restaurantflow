@@ -18,3 +18,14 @@ RETURNING
     status,
     created_at,
     updated_at;
+
+-- name: GetTenantBySlug :one
+SELECT
+    id,
+    name,
+    slug,
+    status,
+    created_at,
+    updated_at
+FROM tenants
+WHERE slug = $1;

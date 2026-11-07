@@ -52,3 +52,29 @@ func (q *Queries) CreateTenant(ctx context.Context, arg CreateTenantParams) (Ten
 	)
 	return i, err
 }
+
+const getTenantBySlug = `-- name: GetTenantBySlug :one
+SELECT
+    id,
+    name,
+    slug,
+    status,
+    created_at,
+    updated_at
+FROM tenants
+WHERE slug = $1
+`
+
+func (q *Queries) GetTenantBySlug(ctx context.Context, slug string) (Tenant, error) {
+	row := q.db.QueryRow(ctx, getTenantBySlug, slug)
+	var i Tenant
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}

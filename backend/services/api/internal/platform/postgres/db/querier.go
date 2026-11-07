@@ -47,6 +47,7 @@ type Querier interface {
 	GetOrderItemByID(ctx context.Context, arg GetOrderItemByIDParams) (OrderItem, error)
 	GetRestaurantByID(ctx context.Context, arg GetRestaurantByIDParams) (Restaurant, error)
 	GetRestaurantBySlug(ctx context.Context, arg GetRestaurantBySlugParams) (Restaurant, error)
+	GetTenantBySlug(ctx context.Context, slug string) (Tenant, error)
 	GetUserByEmail(ctx context.Context, arg GetUserByEmailParams) (User, error)
 	GetUserByID(ctx context.Context, arg GetUserByIDParams) (User, error)
 	ListKDSQueue(ctx context.Context, arg ListKDSQueueParams) ([]KdsTicket, error)
