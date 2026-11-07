@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -18,6 +19,7 @@ type Config struct {
 	Database DatabaseConfig
 	Redis    RedisConfig
 	Storage  StorageConfig
+	JWT      JWTConfig
 }
 
 type DatabaseConfig struct {
@@ -39,6 +41,12 @@ type StorageConfig struct {
 	AccessKey string
 	SecretKey string
 	Bucket    string
+}
+
+type JWTConfig struct {
+	Secret         string
+	Issuer         string
+	AccessTokenTTL time.Duration
 }
 
 func Load() (Config, error) {
@@ -68,6 +76,11 @@ func Load() (Config, error) {
 	}
 
 	cfg.Storage = loadStorageConfig()
+
+	cfg.JWT, err = loadJWTConfig()
+	if err != nil {
+		return Config{}, err
+	}
 
 	return cfg, nil
 }
@@ -193,6 +206,48 @@ func loadStorageConfig() StorageConfig {
 		SecretKey: os.Getenv("STORAGE_SECRET_KEY"),
 		Bucket:    os.Getenv("STORAGE_BUCKET"),
 	}
+}
+
+func loadJWTConfig() (JWTConfig, error) {
+	secret := strings.TrimSpace(os.Getenv("JWT_SECRET"))
+
+	if len(secret) < 32 {
+		return JWTConfig{}, errors.New(
+			"JWT_SECRET must contain at least 32 bytes",
+		)
+	}
+
+	issuer := strings.TrimSpace(
+		getEnv("JWT_ISSUER", "restaurantflow-api"),
+	)
+
+	if issuer == "" {
+		return JWTConfig{}, errors.New("JWT_ISSUER cannot be empty")
+	}
+
+	ttlValue := strings.TrimSpace(
+		getEnv("JWT_ACCESS_TOKEN_TTL", "15m"),
+	)
+
+	ttl, err := time.ParseDuration(ttlValue)
+	if err != nil {
+		return JWTConfig{}, fmt.Errorf(
+			"JWT_ACCESS_TOKEN_TTL must be a valid duration: %w",
+			err,
+		)
+	}
+
+	if ttl <= 0 || ttl > 24*time.Hour {
+		return JWTConfig{}, errors.New(
+			"JWT_ACCESS_TOKEN_TTL must be greater than zero and no more than 24h",
+		)
+	}
+
+	return JWTConfig{
+		Secret:         secret,
+		Issuer:         issuer,
+		AccessTokenTTL: ttl,
+	}, nil
 }
 
 func getEnv(key, fallback string) string {
