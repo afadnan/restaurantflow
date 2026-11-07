@@ -28,6 +28,7 @@ import (
 	userhttp "github.com/afadnan/restaurantflow/services/api/internal/modules/user/delivery/http"
 	userrepository "github.com/afadnan/restaurantflow/services/api/internal/modules/user/repository"
 	userusecase "github.com/afadnan/restaurantflow/services/api/internal/modules/user/usecase"
+	"github.com/afadnan/restaurantflow/services/api/internal/platform/auth"
 	"github.com/afadnan/restaurantflow/services/api/internal/platform/database"
 	"github.com/afadnan/restaurantflow/services/api/internal/platform/events"
 	"github.com/afadnan/restaurantflow/services/api/internal/platform/postgres"
@@ -399,12 +400,22 @@ func run() error {
 	)
 
 	// -------------------------------------------------------------------------
-	// Owner Registration repositories and use case
+	// Authentication: repositories, JWT service and use cases
 	// -------------------------------------------------------------------------
 
 	tenantRepository := tenantrepository.NewPostgresTenantRepository()
 	userRepository := userrepository.NewPostgresUserRepository()
 
+	tokenService, err := auth.NewTokenService(
+		cfg.JWT.Secret,
+		cfg.JWT.Issuer,
+		cfg.JWT.AccessTokenTTL,
+	)
+	if err != nil {
+		return fmt.Errorf("initialize JWT token service: %w", err)
+	}
+
+	// Owner registration
 	registerOwnerUseCase := &userusecase.RegisterOwnerUseCase{
 		DB:      db,
 		Tenants: tenantRepository,
@@ -413,6 +424,18 @@ func run() error {
 
 	ownerRegistrationHandler := userhttp.NewOwnerRegistrationHandler(
 		registerOwnerUseCase,
+	)
+
+	// Owner login
+	loginUseCase := &userusecase.LoginUseCase{
+		DB:      db,
+		Tenants: tenantRepository,
+		Users:   userRepository,
+		Tokens:  tokenService,
+	}
+
+	ownerLoginHandler := userhttp.NewOwnerLoginHandler(
+		loginUseCase,
 	)
 
 	// -------------------------------------------------------------------------
@@ -449,6 +472,7 @@ func run() error {
 	userhttp.RegisterRoutes(
 		mux,
 		ownerRegistrationHandler,
+		ownerLoginHandler,
 	)
 
 	// Order routes

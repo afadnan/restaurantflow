@@ -42,7 +42,38 @@ func writeRegistrationError(
 		)
 
 	default:
-		// Never expose database errors or internal details.
+		http.Error(
+			w,
+			http.StatusText(http.StatusInternalServerError),
+			http.StatusInternalServerError,
+		)
+	}
+}
+
+// writeLoginError maps login failures to safe public HTTP responses.
+func writeLoginError(
+	w http.ResponseWriter,
+	err error,
+) {
+	switch {
+	case errors.Is(err, usecase.ErrInvalidCredentials):
+		// Do not disclose whether the business, email, password,
+		// or account status caused the authentication failure.
+		http.Error(
+			w,
+			"invalid business slug, email or password",
+			http.StatusUnauthorized,
+		)
+
+	case errors.Is(err, usecase.ErrInvalidLoginInput):
+		http.Error(
+			w,
+			"invalid login details",
+			http.StatusBadRequest,
+		)
+
+	default:
+		// Never expose internal errors or database details.
 		http.Error(
 			w,
 			http.StatusText(http.StatusInternalServerError),

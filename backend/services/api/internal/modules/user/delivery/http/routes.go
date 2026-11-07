@@ -2,16 +2,22 @@ package httpdelivery
 
 import "net/http"
 
-// RegisterRoutes registers public owner registration endpoints.
+// RegisterRoutes registers public authentication endpoints.
 //
-// This endpoint must not use TenantMiddleware because the
-// tenant does not exist before registration.
+// These endpoints must not use TenantMiddleware because login
+// establishes the authenticated tenant context.
 func RegisterRoutes(
 	mux *http.ServeMux,
-	handler *OwnerRegistrationHandler,
+	registrationHandler *OwnerRegistrationHandler,
+	loginHandler *OwnerLoginHandler,
 ) {
 	mux.HandleFunc(
 		"POST /api/v1/auth/register/owner",
-		handler.RegisterOwner,
+		registrationHandler.RegisterOwner,
+	)
+
+	mux.HandleFunc(
+		"POST /api/v1/auth/login",
+		loginHandler.Login,
 	)
 }
