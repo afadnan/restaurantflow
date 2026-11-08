@@ -26,6 +26,11 @@ type Querier interface {
 	CreateOrder(ctx context.Context, arg CreateOrderParams) (Order, error)
 	CreateOrderItem(ctx context.Context, arg CreateOrderItemParams) (OrderItem, error)
 	CreateOutboxEvent(ctx context.Context, arg CreateOutboxEventParams) error
+	// ============================================================
+	// RestaurantFlow.fun
+	// Refresh Token Queries
+	// ============================================================
+	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
 	CreateRestaurant(ctx context.Context, arg CreateRestaurantParams) (Restaurant, error)
 	CreateTenant(ctx context.Context, arg CreateTenantParams) (Tenant, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
@@ -45,6 +50,7 @@ type Querier interface {
 	GetMenuItemVariantByID(ctx context.Context, arg GetMenuItemVariantByIDParams) (GetMenuItemVariantByIDRow, error)
 	GetOrderByID(ctx context.Context, arg GetOrderByIDParams) (Order, error)
 	GetOrderItemByID(ctx context.Context, arg GetOrderItemByIDParams) (OrderItem, error)
+	GetRefreshTokenByHash(ctx context.Context, arg GetRefreshTokenByHashParams) (RefreshToken, error)
 	GetRestaurantByID(ctx context.Context, arg GetRestaurantByIDParams) (Restaurant, error)
 	GetRestaurantBySlug(ctx context.Context, arg GetRestaurantBySlugParams) (Restaurant, error)
 	GetTenantBySlug(ctx context.Context, slug string) (Tenant, error)
@@ -59,8 +65,11 @@ type Querier interface {
 	ListOrderItems(ctx context.Context, arg ListOrderItemsParams) ([]OrderItem, error)
 	ListOrders(ctx context.Context, arg ListOrdersParams) ([]Order, error)
 	ListRestaurants(ctx context.Context, arg ListRestaurantsParams) ([]Restaurant, error)
+	LockRefreshTokenByHash(ctx context.Context, arg LockRefreshTokenByHashParams) (RefreshToken, error)
 	MarkOutboxEventFailed(ctx context.Context, arg MarkOutboxEventFailedParams) error
 	MarkOutboxEventPublished(ctx context.Context, arg MarkOutboxEventPublishedParams) error
+	RevokeRefreshTokenFamily(ctx context.Context, arg RevokeRefreshTokenFamilyParams) error
+	RotateRefreshToken(ctx context.Context, arg RotateRefreshTokenParams) (RefreshToken, error)
 	SuspendRestaurant(ctx context.Context, arg SuspendRestaurantParams) (Restaurant, error)
 	UpdateKDSStatus(ctx context.Context, arg UpdateKDSStatusParams) (KdsTicket, error)
 	UpdateMenuAddon(ctx context.Context, arg UpdateMenuAddonParams) (UpdateMenuAddonRow, error)

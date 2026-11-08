@@ -648,6 +648,18 @@ type OutboxEvent struct {
 	ClaimToken  pgtype.UUID        `json:"claim_token"`
 }
 
+type RefreshToken struct {
+	ID                pgtype.UUID        `json:"id"`
+	TenantID          pgtype.UUID        `json:"tenant_id"`
+	UserID            pgtype.UUID        `json:"user_id"`
+	TokenHash         []byte             `json:"token_hash"`
+	FamilyID          pgtype.UUID        `json:"family_id"`
+	ExpiresAt         pgtype.Timestamptz `json:"expires_at"`
+	RevokedAt         pgtype.Timestamptz `json:"revoked_at"`
+	ReplacedByTokenID pgtype.UUID        `json:"replaced_by_token_id"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+}
+
 type Restaurant struct {
 	ID           pgtype.UUID        `json:"id"`
 	TenantID     pgtype.UUID        `json:"tenant_id"`

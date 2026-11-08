@@ -11,9 +11,10 @@ import (
 )
 
 var (
-	ErrUserNotFound = errors.New("user not found")
-	ErrEmailExists  = errors.New("email already exists")
-	ErrInvalidTx    = errors.New("invalid database transaction")
+	ErrUserNotFound         = errors.New("user not found")
+	ErrEmailExists          = errors.New("email already exists")
+	ErrInvalidTx            = errors.New("invalid database transaction")
+	ErrRefreshTokenNotFound = errors.New("refresh token not found")
 )
 
 type UserRepository interface {
