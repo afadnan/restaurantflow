@@ -405,6 +405,8 @@ func run() error {
 
 	tenantRepository := tenantrepository.NewPostgresTenantRepository()
 	userRepository := userrepository.NewPostgresUserRepository()
+	refreshTokenRepository := userrepository.NewPostgresRefreshTokenRepository()
+	refreshTokenGenerator := auth.NewRefreshTokenGenerator()
 
 	tokenService, err := auth.NewTokenService(
 		cfg.JWT.Secret,
@@ -428,10 +430,12 @@ func run() error {
 
 	// Owner login
 	loginUseCase := &userusecase.LoginUseCase{
-		DB:      db,
-		Tenants: tenantRepository,
-		Users:   userRepository,
-		Tokens:  tokenService,
+		DB:                    db,
+		Tenants:               tenantRepository,
+		Users:                 userRepository,
+		Tokens:                tokenService,
+		RefreshTokens:         refreshTokenRepository,
+		RefreshTokenGenerator: refreshTokenGenerator,
 	}
 
 	ownerLoginHandler := userhttp.NewOwnerLoginHandler(
