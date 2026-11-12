@@ -28,13 +28,15 @@ type loginRequest struct {
 	Password     string `json:"password"`
 }
 
-// loginResponse contains the access token and safe account details.
+// loginResponse contains access and refresh tokens and safe account details.
 type loginResponse struct {
-	AccessToken string            `json:"access_token"`
-	TokenType   string            `json:"token_type"`
-	ExpiresAt   time.Time         `json:"expires_at"`
-	Tenant      tenantResponse    `json:"tenant"`
-	User        loginUserResponse `json:"user"`
+	AccessToken           string            `json:"access_token"`
+	TokenType             string            `json:"token_type"`
+	ExpiresAt             time.Time         `json:"expires_at"`
+	RefreshToken          string            `json:"refresh_token"`
+	RefreshTokenExpiresAt time.Time         `json:"refresh_token_expires_at"`
+	Tenant                tenantResponse    `json:"tenant"`
+	User                  loginUserResponse `json:"user"`
 }
 
 // loginUserResponse contains safe user information.
@@ -110,9 +112,11 @@ func newLoginResponse(
 	result *usecase.LoginResult,
 ) loginResponse {
 	return loginResponse{
-		AccessToken: result.AccessToken,
-		TokenType:   result.TokenType,
-		ExpiresAt:   result.ExpiresAt,
+		AccessToken:           result.AccessToken,
+		TokenType:             result.TokenType,
+		ExpiresAt:             result.ExpiresAt,
+		RefreshToken:          result.RefreshToken,
+		RefreshTokenExpiresAt: result.RefreshTokenExpiresAt,
 		Tenant: tenantResponse{
 			ID:     result.Tenant.ID.String(),
 			Name:   result.Tenant.Name,
