@@ -14,6 +14,7 @@ import (
 
 	userhttp "github.com/afadnan/restaurantflow/services/api/internal/modules/user/delivery/http"
 	userrepository "github.com/afadnan/restaurantflow/services/api/internal/modules/user/repository"
+	"github.com/afadnan/restaurantflow/services/api/internal/platform/auth"
 )
 
 func TestIntegrationOwnerLoginHTTP(t *testing.T) {
@@ -111,9 +112,11 @@ func TestIntegrationOwnerLoginHTTP(t *testing.T) {
 		)
 
 		var response struct {
-			AccessToken string    `json:"access_token"`
-			TokenType   string    `json:"token_type"`
-			ExpiresAt   time.Time `json:"expires_at"`
+			AccessToken           string    `json:"access_token"`
+			TokenType             string    `json:"token_type"`
+			ExpiresAt             time.Time `json:"expires_at"`
+			RefreshToken          string    `json:"refresh_token"`
+			RefreshTokenExpiresAt time.Time `json:"refresh_token_expires_at"`
 
 			Tenant struct {
 				ID     string `json:"id"`
@@ -137,14 +140,28 @@ func TestIntegrationOwnerLoginHTTP(t *testing.T) {
 			json.Unmarshal(recorder.Body.Bytes(), &response),
 		)
 
+		// Verify access token response.
 		require.NotEmpty(t, response.AccessToken)
 		require.Equal(t, "Bearer", response.TokenType)
 		require.False(t, response.ExpiresAt.IsZero())
 
+		// Verify refresh token response.
+		require.NotEmpty(t, response.RefreshToken)
+		require.False(t, response.RefreshTokenExpiresAt.IsZero())
+
+		require.WithinDuration(
+			t,
+			time.Now().Add(30*24*time.Hour),
+			response.RefreshTokenExpiresAt,
+			2*time.Minute,
+		)
+
+		// Verify tenant response.
 		require.Equal(t, tenantID.String(), response.Tenant.ID)
 		require.Equal(t, slug, response.Tenant.Slug)
 		require.Equal(t, "active", response.Tenant.Status)
 
+		// Verify user response.
 		require.Equal(t, user.ID.String(), response.User.ID)
 		require.Equal(t, tenantID.String(), response.User.TenantID)
 		require.Equal(t, "owner@example.com", response.User.Email)
@@ -170,7 +187,7 @@ func TestIntegrationOwnerLoginHTTP(t *testing.T) {
 			integrationLoginPassword,
 		)
 
-		// Verify LastLoginAt was persisted.
+		// Verify LastLoginAt and refresh-token persistence.
 		ctx, cancel := context.WithTimeout(
 			context.Background(),
 			10*time.Second,
@@ -179,6 +196,7 @@ func TestIntegrationOwnerLoginHTTP(t *testing.T) {
 
 		tx, err := i.db.BeginTx(ctx, tenantID)
 		require.NoError(t, err)
+
 		defer func() {
 			_ = tx.Rollback(context.Background())
 		}()
@@ -188,6 +206,48 @@ func TestIntegrationOwnerLoginHTTP(t *testing.T) {
 
 		require.NoError(t, err)
 		require.NotNil(t, stored.LastLoginAt)
+
+		// Hash the returned plaintext refresh token.
+		// The database must store only this hash, never the plaintext.
+		refreshTokenHash, err := auth.HashRefreshToken(
+			response.RefreshToken,
+		)
+		require.NoError(t, err)
+
+		storedRefreshToken, err := userrepository.
+			NewPostgresRefreshTokenRepository().
+			GetByHash(ctx, tx, tenantID, refreshTokenHash)
+
+		require.NoError(t, err)
+		require.NotNil(t, storedRefreshToken)
+
+		require.Equal(
+			t,
+			tenantID,
+			storedRefreshToken.TenantID,
+		)
+
+		require.Equal(
+			t,
+			user.ID,
+			storedRefreshToken.UserID,
+		)
+
+		require.Equal(
+			t,
+			refreshTokenHash,
+			storedRefreshToken.TokenHash,
+		)
+
+		require.WithinDuration(
+			t,
+			response.RefreshTokenExpiresAt,
+			storedRefreshToken.ExpiresAt,
+			time.Second,
+		)
+
+		require.Nil(t, storedRefreshToken.RevokedAt)
+		require.Nil(t, storedRefreshToken.ReplacedByTokenID)
 
 		require.NoError(t, tx.Rollback(ctx))
 	})
@@ -248,7 +308,11 @@ func TestIntegrationOwnerLoginHTTP(t *testing.T) {
 				if index == 0 {
 					expectedBody = recorder.Body.String()
 				} else {
-					require.Equal(t, expectedBody, recorder.Body.String())
+					require.Equal(
+						t,
+						expectedBody,
+						recorder.Body.String(),
+					)
 				}
 			})
 		}
@@ -274,6 +338,7 @@ func TestIntegrationOwnerLoginHTTP(t *testing.T) {
 			user.ID,
 		)
 		require.NoError(t, err)
+
 		require.NoError(t, tx.Commit(ctx))
 
 		recorder := sendLoginRequest(
@@ -335,7 +400,10 @@ func TestIntegrationOwnerLoginHTTP(t *testing.T) {
 		)
 
 		var request map[string]any
-		require.NoError(t, json.Unmarshal([]byte(body), &request))
+		require.NoError(
+			t,
+			json.Unmarshal([]byte(body), &request),
+		)
 
 		request["admin"] = true
 
