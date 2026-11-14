@@ -73,10 +73,12 @@ func newLoginTestUseCase(
 	}
 
 	login := &userusecase.LoginUseCase{
-		DB:      i.db,
-		Tenants: tenantrepository.NewPostgresTenantRepository(),
-		Users:   userrepository.NewPostgresUserRepository(),
-		Tokens:  tokenService,
+		DB:                    i.db,
+		Tenants:               tenantrepository.NewPostgresTenantRepository(),
+		Users:                 userrepository.NewPostgresUserRepository(),
+		RefreshTokens:         userrepository.NewPostgresRefreshTokenRepository(),
+		Tokens:                tokenService,
+		RefreshTokenGenerator: auth.NewRefreshTokenGenerator(),
 	}
 
 	return login, tokenService
@@ -123,6 +125,17 @@ func TestIntegrationLoginUseCase(t *testing.T) {
 		require.False(t, result.ExpiresAt.IsZero())
 		require.NotEmpty(t, result.AccessToken)
 
+		// Verify refresh-token issuance.
+		require.NotEmpty(t, result.RefreshToken)
+		require.False(t, result.RefreshTokenExpiresAt.IsZero())
+
+		require.WithinDuration(
+			t,
+			time.Now().Add(30*24*time.Hour),
+			result.RefreshTokenExpiresAt,
+			2*time.Minute,
+		)
+
 		claims, err := tokenService.ValidateAccessToken(
 			result.AccessToken,
 		)
@@ -132,11 +145,12 @@ func TestIntegrationLoginUseCase(t *testing.T) {
 		require.Equal(t, tenantID.String(), claims.TenantID)
 		require.Equal(t, "owner", claims.Role)
 
-		// The token and response must never expose password data.
+		// The tokens must never expose password data.
 		require.NotContains(t, result.AccessToken, user.PasswordHash)
 		require.NotContains(t, result.AccessToken, integrationLoginPassword)
+		require.NotContains(t, result.RefreshToken, integrationLoginPassword)
 
-		// Verify last login was persisted.
+		// Verify last login and refresh-token persistence.
 		tx, err := i.db.BeginTx(ctx, tenantID)
 		require.NoError(t, err)
 
@@ -149,6 +163,29 @@ func TestIntegrationLoginUseCase(t *testing.T) {
 
 		require.NoError(t, err)
 		require.NotNil(t, stored.LastLoginAt)
+
+		// Verify only the SHA-256 hash is stored.
+		refreshTokenHash, hashErr := auth.HashRefreshToken(result.RefreshToken)
+		require.NoError(t, hashErr)
+
+		storedRefreshToken, err := userrepository.NewPostgresRefreshTokenRepository().
+			GetByHash(ctx, tx, tenantID, refreshTokenHash)
+
+		require.NoError(t, err)
+		require.NotNil(t, storedRefreshToken)
+		require.Equal(t, tenantID, storedRefreshToken.TenantID)
+		require.Equal(t, user.ID, storedRefreshToken.UserID)
+		require.Equal(t, refreshTokenHash, storedRefreshToken.TokenHash)
+
+		require.WithinDuration(
+			t,
+			result.RefreshTokenExpiresAt,
+			storedRefreshToken.ExpiresAt,
+			time.Second,
+		)
+
+		require.Nil(t, storedRefreshToken.RevokedAt)
+		require.Nil(t, storedRefreshToken.ReplacedByTokenID)
 	})
 
 	t.Run("invalid credentials return same error", func(t *testing.T) {
@@ -187,11 +224,7 @@ func TestIntegrationLoginUseCase(t *testing.T) {
 				result, err := login.Execute(ctx, tc.input)
 
 				require.Nil(t, result)
-				require.ErrorIs(
-					t,
-					err,
-					userusecase.ErrInvalidCredentials,
-				)
+				require.ErrorIs(t, err, userusecase.ErrInvalidCredentials)
 			})
 		}
 	})
@@ -215,11 +248,7 @@ func TestIntegrationLoginUseCase(t *testing.T) {
 		})
 
 		require.Nil(t, result)
-		require.ErrorIs(
-			t,
-			err,
-			userusecase.ErrInvalidCredentials,
-		)
+		require.ErrorIs(t, err, userusecase.ErrInvalidCredentials)
 	})
 }
 
@@ -235,7 +264,6 @@ func TestIntegrationLoginTenantIsolation(t *testing.T) {
 	tenantA := i.createTenant(t)
 	tenantB := i.createTenant(t)
 
-	// The same email is allowed in different tenants.
 	userA := createLoginTestUser(
 		t,
 		i,
@@ -284,6 +312,7 @@ func TestIntegrationLoginTenantIsolation(t *testing.T) {
 
 			require.NoError(t, err)
 			require.NotNil(t, result)
+			require.NotEmpty(t, result.RefreshToken)
 
 			claims, err := tokenService.ValidateAccessToken(
 				result.AccessToken,
@@ -292,6 +321,22 @@ func TestIntegrationLoginTenantIsolation(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, tc.userID.String(), claims.Subject)
 			require.Equal(t, tc.tenantID.String(), claims.TenantID)
+
+			// Verify the refresh token belongs to the correct tenant and user.
+			tx, err := i.db.BeginTx(ctx, tc.tenantID)
+			require.NoError(t, err)
+
+			refreshTokenHash, hashErr := auth.HashRefreshToken(result.RefreshToken)
+			require.NoError(t, hashErr)
+
+			storedRefreshToken, err := userrepository.NewPostgresRefreshTokenRepository().
+				GetByHash(ctx, tx, tc.tenantID, refreshTokenHash)
+
+			require.NoError(t, err)
+			require.Equal(t, tc.tenantID, storedRefreshToken.TenantID)
+			require.Equal(t, tc.userID, storedRefreshToken.UserID)
+
+			require.NoError(t, tx.Rollback(context.Background()))
 		})
 	}
 }

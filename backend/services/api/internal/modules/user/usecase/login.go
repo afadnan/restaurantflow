@@ -23,6 +23,12 @@ var (
 	ErrInvalidCredentials = errors.New("invalid email or password")
 )
 
+const RefreshTokenTTL = 30 * 24 * time.Hour
+
+type RefreshTokenGenerator interface {
+	Generate() (*auth.GeneratedRefreshToken, error)
+}
+
 type AccessTokenIssuer interface {
 	GenerateAccessToken(
 		userID uuid.UUID,
@@ -32,10 +38,12 @@ type AccessTokenIssuer interface {
 }
 
 type LoginUseCase struct {
-	DB      *postgres.DB
-	Tenants tenantrepository.TenantRepository
-	Users   userrepository.UserRepository
-	Tokens  AccessTokenIssuer
+	DB                    *postgres.DB
+	Tenants               tenantrepository.TenantRepository
+	Users                 userrepository.UserRepository
+	RefreshTokens         userrepository.RefreshTokenRepository
+	Tokens                AccessTokenIssuer
+	RefreshTokenGenerator RefreshTokenGenerator
 }
 
 type LoginInput struct {
@@ -45,11 +53,13 @@ type LoginInput struct {
 }
 
 type LoginResult struct {
-	AccessToken string
-	TokenType   string
-	ExpiresAt   time.Time
-	Tenant      *tenantdomain.Tenant
-	User        *userdomain.User
+	AccessToken           string
+	TokenType             string
+	ExpiresAt             time.Time
+	RefreshToken          string
+	RefreshTokenExpiresAt time.Time
+	Tenant                *tenantdomain.Tenant
+	User                  *userdomain.User
 }
 
 func (uc *LoginUseCase) Execute(
@@ -61,7 +71,9 @@ func (uc *LoginUseCase) Execute(
 		uc.DB.Pool == nil ||
 		uc.Tenants == nil ||
 		uc.Users == nil ||
-		uc.Tokens == nil {
+		uc.Tokens == nil ||
+		uc.RefreshTokens == nil ||
+		uc.RefreshTokenGenerator == nil {
 		return nil, ErrLoginNotConfigured
 	}
 
@@ -156,15 +168,54 @@ func (uc *LoginUseCase) Execute(
 		return nil, fmt.Errorf("generate login access token: %w", err)
 	}
 
+	// Generate a new opaque refresh token.
+	generatedRefreshToken, err := uc.RefreshTokenGenerator.Generate()
+	if err != nil {
+		return nil, fmt.Errorf("generate login refresh token: %w", err)
+	}
+
+	if generatedRefreshToken == nil ||
+		generatedRefreshToken.Plaintext == "" ||
+		len(generatedRefreshToken.Hash) != auth.RefreshTokenRandomBytes {
+		return nil, errors.New("refresh token generator returned invalid token")
+	}
+
+	// Use one timestamp for consistent creation and expiry values.
+	now := time.Now().UTC()
+	refreshTokenExpiresAt := now.Add(RefreshTokenTTL)
+
+	// Each login starts an independent refresh-token family.
+	familyID := uuid.New()
+
+	refreshToken, err := userdomain.NewRefreshToken(
+		tenant.ID,
+		updatedUser.ID,
+		familyID,
+		generatedRefreshToken.Hash,
+		refreshTokenExpiresAt,
+		now,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create login refresh token: %w", err)
+	}
+
+	// Persist only the hash, never the plaintext refresh token.
+	if err := uc.RefreshTokens.Create(ctx, tx, refreshToken); err != nil {
+		return nil, fmt.Errorf("persist login refresh token: %w", err)
+	}
+
+	// Commit both last-login update and refresh-token creation atomically.
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit login transaction: %w", err)
 	}
 
 	return &LoginResult{
-		AccessToken: accessToken,
-		TokenType:   "Bearer",
-		ExpiresAt:   expiresAt,
-		Tenant:      tenant,
-		User:        updatedUser,
+		AccessToken:           accessToken,
+		TokenType:             "Bearer",
+		ExpiresAt:             expiresAt,
+		RefreshToken:          generatedRefreshToken.Plaintext,
+		RefreshTokenExpiresAt: refreshTokenExpiresAt,
+		Tenant:                tenant,
+		User:                  updatedUser,
 	}, nil
 }
