@@ -43,7 +43,7 @@ func TestIntegrationOwnerLoginHTTP(t *testing.T) {
 	loginHandler := userhttp.NewOwnerLoginHandler(loginUseCase)
 
 	mux := http.NewServeMux()
-	userhttp.RegisterRoutes(mux, registrationHandler, loginHandler)
+	userhttp.RegisterRoutes(mux, registrationHandler, loginHandler, nil)
 
 	sendLoginRequest := func(body string) *httptest.ResponseRecorder {
 		t.Helper()
@@ -196,10 +196,6 @@ func TestIntegrationOwnerLoginHTTP(t *testing.T) {
 
 		tx, err := i.db.BeginTx(ctx, tenantID)
 		require.NoError(t, err)
-
-		defer func() {
-			_ = tx.Rollback(context.Background())
-		}()
 
 		stored, err := userrepository.NewPostgresUserRepository().
 			GetByID(ctx, tx, tenantID, user.ID)

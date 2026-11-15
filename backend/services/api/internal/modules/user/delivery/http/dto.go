@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/afadnan/restaurantflow/services/api/internal/modules/user/usecase"
+	"github.com/google/uuid"
 )
 
 // registerOwnerRequest represents the public owner registration payload.
@@ -26,6 +27,20 @@ type loginRequest struct {
 	BusinessSlug string `json:"business_slug"`
 	Email        string `json:"email"`
 	Password     string `json:"password"`
+}
+
+type refreshRequest struct {
+	TenantID     string `json:"tenant_id"`
+	RefreshToken string `json:"refresh_token"`
+}
+
+type refreshResponse struct {
+	AccessToken           string            `json:"access_token"`
+	TokenType             string            `json:"token_type"`
+	ExpiresAt             time.Time         `json:"expires_at"`
+	RefreshToken          string            `json:"refresh_token"`
+	RefreshTokenExpiresAt time.Time         `json:"refresh_token_expires_at"`
+	User                  loginUserResponse `json:"user"`
 }
 
 // loginResponse contains access and refresh tokens and safe account details.
@@ -65,6 +80,15 @@ type ownerResponse struct {
 	Status    string `json:"status"`
 }
 
+func (r refreshRequest) toUseCaseInput(
+	tenantID uuid.UUID,
+) usecase.RefreshInput {
+	return usecase.RefreshInput{
+		TenantID:     tenantID,
+		RefreshToken: r.RefreshToken,
+	}
+}
+
 // toUseCaseInput maps HTTP registration input to the application use case.
 func (r registerOwnerRequest) toUseCaseInput() usecase.RegisterOwnerInput {
 	return usecase.RegisterOwnerInput{
@@ -82,6 +106,26 @@ func (r loginRequest) toUseCaseInput() usecase.LoginInput {
 		BusinessSlug: r.BusinessSlug,
 		Email:        r.Email,
 		Password:     r.Password,
+	}
+}
+
+func newRefreshResponse(
+	result *usecase.RefreshResult,
+) refreshResponse {
+	return refreshResponse{
+		AccessToken:           result.AccessToken,
+		TokenType:             result.TokenType,
+		ExpiresAt:             result.ExpiresAt,
+		RefreshToken:          result.RefreshToken,
+		RefreshTokenExpiresAt: result.RefreshTokenExpiresAt,
+		User: loginUserResponse{
+			ID:        result.User.ID.String(),
+			TenantID:  result.User.TenantID.String(),
+			Email:     result.User.Email,
+			FirstName: result.User.FirstName,
+			Role:      string(result.User.Role),
+			Status:    string(result.User.Status),
+		},
 	}
 }
 

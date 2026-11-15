@@ -10,6 +10,7 @@ func RegisterRoutes(
 	mux *http.ServeMux,
 	registrationHandler *OwnerRegistrationHandler,
 	loginHandler *OwnerLoginHandler,
+	refreshHandler *RefreshHandler,
 ) {
 	mux.HandleFunc(
 		"POST /api/v1/auth/register/owner",
@@ -19,5 +20,10 @@ func RegisterRoutes(
 	mux.HandleFunc(
 		"POST /api/v1/auth/login",
 		loginHandler.Login,
+	)
+
+	mux.HandleFunc(
+		"POST /api/v1/auth/refresh",
+		refreshHandler.Refresh,
 	)
 }

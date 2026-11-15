@@ -28,7 +28,7 @@ func TestIntegrationOwnerRegistrationHTTP(t *testing.T) {
 	handler := userhttp.NewOwnerRegistrationHandler(registerOwner)
 
 	mux := http.NewServeMux()
-	userhttp.RegisterRoutes(mux, handler, nil)
+	userhttp.RegisterRoutes(mux, handler, nil, nil)
 
 	// ---------------------------------------------------------
 	// Test 1: Successful owner registration
@@ -419,7 +419,7 @@ func TestIntegrationOwnerRegistrationHTTP(t *testing.T) {
 		failingHandler := userhttp.NewOwnerRegistrationHandler(failingUseCase)
 
 		failingMux := http.NewServeMux()
-		userhttp.RegisterRoutes(failingMux, failingHandler, nil)
+		userhttp.RegisterRoutes(failingMux, failingHandler, nil, nil)
 
 		body, err := json.Marshal(map[string]string{
 			"business_name": "Rollback Test Cafe",

@@ -81,3 +81,31 @@ func writeLoginError(
 		)
 	}
 }
+
+func writeRefreshError(
+	w http.ResponseWriter,
+	err error,
+) {
+	switch {
+	case errors.Is(err, usecase.ErrInvalidRefreshToken):
+		http.Error(
+			w,
+			"invalid or expired refresh token",
+			http.StatusUnauthorized,
+		)
+
+	case errors.Is(err, usecase.ErrInvalidRefreshInput):
+		http.Error(
+			w,
+			"invalid refresh details",
+			http.StatusBadRequest,
+		)
+
+	default:
+		http.Error(
+			w,
+			http.StatusText(http.StatusInternalServerError),
+			http.StatusInternalServerError,
+		)
+	}
+}

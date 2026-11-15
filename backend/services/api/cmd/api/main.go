@@ -442,6 +442,16 @@ func run() error {
 		loginUseCase,
 	)
 
+	refreshUseCase := &userusecase.RefreshUseCase{
+		DB:                    db,
+		Users:                 userRepository,
+		RefreshTokens:         refreshTokenRepository,
+		Tokens:                tokenService,
+		RefreshTokenGenerator: refreshTokenGenerator,
+	}
+
+	refreshHandler := userhttp.NewRefreshHandler(refreshUseCase)
+
 	// -------------------------------------------------------------------------
 	// Menu Add-on HTTP handler
 	// -------------------------------------------------------------------------
@@ -477,6 +487,7 @@ func run() error {
 		mux,
 		ownerRegistrationHandler,
 		ownerLoginHandler,
+		refreshHandler,
 	)
 
 	// Order routes
