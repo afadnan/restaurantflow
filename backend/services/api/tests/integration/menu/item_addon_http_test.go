@@ -24,6 +24,9 @@ func TestIntegrationMenuItemAddonHTTP(t *testing.T) {
 	integration := newVariantIntegration(t)
 	fixture := integration.createFixture(t)
 
+	// Create a valid JWT for the fixture tenant.
+	authMiddleware, accessToken := newVariantAuth(t, fixture.tenantID)
+
 	addonDeps := usecase.AddonUseCaseDependencies{
 		DB:     integration.db,
 		Addons: repository.NewPostgresAddonRepository(),
@@ -62,8 +65,18 @@ func TestIntegrationMenuItemAddonHTTP(t *testing.T) {
 	)
 
 	mux := http.NewServeMux()
-	menuhttp.RegisterAddonRoutes(mux, addonHandler)
-	menuhttp.RegisterItemAddonRoutes(mux, itemAddonHandler)
+
+	menuhttp.RegisterAddonRoutes(
+		mux,
+		addonHandler,
+		authMiddleware,
+	)
+
+	menuhttp.RegisterItemAddonRoutes(
+		mux,
+		itemAddonHandler,
+		authMiddleware,
+	)
 
 	addonBasePath := fmt.Sprintf(
 		"/api/v1/restaurants/%s/menu/addons",
@@ -85,6 +98,8 @@ func TestIntegrationMenuItemAddonHTTP(t *testing.T) {
 		MaxQuantity  int32  `json:"max_quantity"`
 	}
 
+	// Execute requests through the real HTTP router.
+	// Every request carries a valid access token.
 	request := func(
 		method, path, body string,
 		tenantID uuid.UUID,
@@ -103,6 +118,8 @@ func TestIntegrationMenuItemAddonHTTP(t *testing.T) {
 			strings.NewReader(body),
 		).WithContext(ctx)
 
+		req.Header.Set("Authorization", "Bearer "+accessToken)
+
 		if tenantID != uuid.Nil {
 			req.Header.Set("X-Tenant-ID", tenantID.String())
 		}
@@ -113,6 +130,7 @@ func TestIntegrationMenuItemAddonHTTP(t *testing.T) {
 
 		recorder := httptest.NewRecorder()
 		mux.ServeHTTP(recorder, req)
+
 		return recorder
 	}
 
@@ -122,10 +140,13 @@ func TestIntegrationMenuItemAddonHTTP(t *testing.T) {
 		t.Helper()
 
 		var result itemAddonJSON
-		require.NoError(t, json.Unmarshal(
-			recorder.Body.Bytes(),
-			&result,
-		))
+
+		require.NoError(
+			t,
+			json.Unmarshal(recorder.Body.Bytes(), &result),
+			recorder.Body.String(),
+		)
+
 		return result
 	}
 
@@ -136,19 +157,26 @@ func TestIntegrationMenuItemAddonHTTP(t *testing.T) {
 		`{"name":"Item HTTP Extra Cheese","description":"Test topping","price":"25.00"}`,
 		fixture.tenantID,
 	)
-	require.Equal(t, http.StatusCreated, createResponse.Code,
-		createResponse.Body.String())
+
+	require.Equal(
+		t,
+		http.StatusCreated,
+		createResponse.Code,
+		createResponse.Body.String(),
+	)
 
 	var createdAddon struct {
 		ID string `json:"id"`
 	}
-	require.NoError(t, json.Unmarshal(
-		createResponse.Body.Bytes(),
-		&createdAddon,
-	))
+
+	require.NoError(
+		t,
+		json.Unmarshal(createResponse.Body.Bytes(), &createdAddon),
+	)
 
 	addonID, err := uuid.Parse(createdAddon.ID)
 	require.NoError(t, err)
+	require.NotEqual(t, uuid.Nil, addonID)
 
 	associationPath := itemAddonBasePath + "/" + addonID.String()
 
@@ -165,8 +193,12 @@ func TestIntegrationMenuItemAddonHTTP(t *testing.T) {
 			fixture.tenantID,
 		)
 
-		require.Equal(t, http.StatusCreated, response.Code,
-			response.Body.String())
+		require.Equal(
+			t,
+			http.StatusCreated,
+			response.Code,
+			response.Body.String(),
+		)
 
 		association := decodeAssociation(response)
 
@@ -193,10 +225,15 @@ func TestIntegrationMenuItemAddonHTTP(t *testing.T) {
 			fixture.tenantID,
 		)
 
-		require.Equal(t, http.StatusOK, response.Code,
-			response.Body.String())
+		require.Equal(
+			t,
+			http.StatusOK,
+			response.Code,
+			response.Body.String(),
+		)
 
 		association := decodeAssociation(response)
+
 		require.Equal(t, addonID.String(), association.AddonID)
 		require.EqualValues(t, 2, association.MaxQuantity)
 	})
@@ -209,8 +246,12 @@ func TestIntegrationMenuItemAddonHTTP(t *testing.T) {
 			fixture.tenantID,
 		)
 
-		require.Equal(t, http.StatusOK, response.Code,
-			response.Body.String())
+		require.Equal(
+			t,
+			http.StatusOK,
+			response.Code,
+			response.Body.String(),
+		)
 
 		var result struct {
 			Addons []itemAddonJSON `json:"addons"`
@@ -218,10 +259,11 @@ func TestIntegrationMenuItemAddonHTTP(t *testing.T) {
 			Offset int             `json:"offset"`
 		}
 
-		require.NoError(t, json.Unmarshal(
-			response.Body.Bytes(),
-			&result,
-		))
+		require.NoError(
+			t,
+			json.Unmarshal(response.Body.Bytes(), &result),
+			response.Body.String(),
+		)
 
 		require.Equal(t, 10, result.Limit)
 		require.Zero(t, result.Offset)
@@ -242,8 +284,12 @@ func TestIntegrationMenuItemAddonHTTP(t *testing.T) {
 			fixture.tenantID,
 		)
 
-		require.Equal(t, http.StatusConflict, response.Code,
-			response.Body.String())
+		require.Equal(
+			t,
+			http.StatusConflict,
+			response.Code,
+			response.Body.String(),
+		)
 
 		require.Equal(t, 1, integration.countEvents(
 			t,
@@ -261,10 +307,15 @@ func TestIntegrationMenuItemAddonHTTP(t *testing.T) {
 			fixture.tenantID,
 		)
 
-		require.Equal(t, http.StatusOK, response.Code,
-			response.Body.String())
+		require.Equal(
+			t,
+			http.StatusOK,
+			response.Code,
+			response.Body.String(),
+		)
 
 		association := decodeAssociation(response)
+
 		require.True(t, association.IsRequired)
 		require.EqualValues(t, 3, association.MaxQuantity)
 
@@ -284,8 +335,12 @@ func TestIntegrationMenuItemAddonHTTP(t *testing.T) {
 			fixture.tenantID,
 		)
 
-		require.Equal(t, http.StatusBadRequest, response.Code,
-			response.Body.String())
+		require.Equal(
+			t,
+			http.StatusBadRequest,
+			response.Code,
+			response.Body.String(),
+		)
 
 		require.Equal(t, 1, integration.countEvents(
 			t,
@@ -349,7 +404,7 @@ func TestIntegrationMenuItemAddonHTTP(t *testing.T) {
 		require.Equal(t, http.StatusBadRequest, response.Code)
 	})
 
-	t.Run("missing tenant rejected", func(t *testing.T) {
+	t.Run("missing tenant header uses JWT tenant", func(t *testing.T) {
 		response := request(
 			http.MethodGet,
 			associationPath,
@@ -357,10 +412,15 @@ func TestIntegrationMenuItemAddonHTTP(t *testing.T) {
 			uuid.Nil,
 		)
 
-		require.Equal(t, http.StatusUnauthorized, response.Code)
+		require.Equal(
+			t,
+			http.StatusOK,
+			response.Code,
+			response.Body.String(),
+		)
 	})
 
-	t.Run("other tenant cannot read association", func(t *testing.T) {
+	t.Run("tenant header mismatch is forbidden", func(t *testing.T) {
 		response := request(
 			http.MethodGet,
 			associationPath,
@@ -368,8 +428,12 @@ func TestIntegrationMenuItemAddonHTTP(t *testing.T) {
 			uuid.New(),
 		)
 
-		require.Equal(t, http.StatusNotFound, response.Code,
-			response.Body.String())
+		require.Equal(
+			t,
+			http.StatusForbidden,
+			response.Code,
+			response.Body.String(),
+		)
 	})
 
 	t.Run("wrong restaurant cannot read association", func(t *testing.T) {
@@ -387,8 +451,12 @@ func TestIntegrationMenuItemAddonHTTP(t *testing.T) {
 			fixture.tenantID,
 		)
 
-		require.Equal(t, http.StatusNotFound, response.Code,
-			response.Body.String())
+		require.Equal(
+			t,
+			http.StatusNotFound,
+			response.Code,
+			response.Body.String(),
+		)
 	})
 
 	t.Run("detach association", func(t *testing.T) {
@@ -399,8 +467,12 @@ func TestIntegrationMenuItemAddonHTTP(t *testing.T) {
 			fixture.tenantID,
 		)
 
-		require.Equal(t, http.StatusOK, response.Code,
-			response.Body.String())
+		require.Equal(
+			t,
+			http.StatusOK,
+			response.Code,
+			response.Body.String(),
+		)
 
 		require.Equal(t, 1, integration.countEvents(
 			t,
@@ -418,7 +490,11 @@ func TestIntegrationMenuItemAddonHTTP(t *testing.T) {
 			fixture.tenantID,
 		)
 
-		require.Equal(t, http.StatusNotFound, response.Code,
-			response.Body.String())
+		require.Equal(
+			t,
+			http.StatusNotFound,
+			response.Code,
+			response.Body.String(),
+		)
 	})
 }

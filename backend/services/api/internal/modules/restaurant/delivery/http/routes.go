@@ -9,39 +9,40 @@ import (
 func RegisterRoutes(
 	mux *http.ServeMux,
 	handler *RestaurantHandler,
+	authMiddleware func(http.Handler) http.Handler,
 ) {
 	mux.Handle(
 		"POST /api/v1/restaurants",
-		middleware.TenantMiddleware(
+		authMiddleware(middleware.TenantMiddleware(
 			http.HandlerFunc(handler.CreateRestaurant),
-		),
+		)),
 	)
 
 	mux.Handle(
 		"GET /api/v1/restaurants",
-		middleware.TenantMiddleware(
+		authMiddleware(middleware.TenantMiddleware(
 			http.HandlerFunc(handler.ListRestaurants),
-		),
+		)),
 	)
 
 	mux.Handle(
 		"GET /api/v1/restaurants/{restaurantID}",
-		middleware.TenantMiddleware(
+		authMiddleware(middleware.TenantMiddleware(
 			http.HandlerFunc(handler.GetRestaurant),
-		),
+		)),
 	)
 
 	mux.Handle(
 		"PUT /api/v1/restaurants/{restaurantID}",
-		middleware.TenantMiddleware(
+		authMiddleware(middleware.TenantMiddleware(
 			http.HandlerFunc(handler.UpdateRestaurant),
-		),
+		)),
 	)
 
 	mux.Handle(
 		"PATCH /api/v1/restaurants/{restaurantID}/deactivate",
-		middleware.TenantMiddleware(
+		authMiddleware(middleware.TenantMiddleware(
 			http.HandlerFunc(handler.DeactivateRestaurant),
-		),
+		)),
 	)
 }

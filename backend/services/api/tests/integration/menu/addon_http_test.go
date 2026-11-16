@@ -47,8 +47,17 @@ func TestIntegrationMenuAddonHTTP(t *testing.T) {
 		},
 	)
 
+	authMiddleware, accessToken := newVariantAuth(
+		t,
+		fixture.tenantID,
+	)
+
 	mux := http.NewServeMux()
-	menuhttp.RegisterAddonRoutes(mux, handler)
+	menuhttp.RegisterAddonRoutes(
+		mux,
+		handler,
+		authMiddleware,
+	)
 
 	basePath := "/api/v1/restaurants/" +
 		fixture.restaurantID.String() + "/menu/addons"
@@ -71,23 +80,33 @@ func TestIntegrationMenuAddonHTTP(t *testing.T) {
 		t.Helper()
 
 		ctx, cancel := context.WithTimeout(
-			context.Background(), 10*time.Second,
+			context.Background(),
+			10*time.Second,
 		)
 		defer cancel()
 
 		req := httptest.NewRequest(
-			method, path, strings.NewReader(body),
+			method,
+			path,
+			strings.NewReader(body),
 		).WithContext(ctx)
+
+		req.Header.Set(
+			"Authorization",
+			"Bearer "+accessToken,
+		)
 
 		if tenantID != uuid.Nil {
 			req.Header.Set("X-Tenant-ID", tenantID.String())
 		}
+
 		if body != "" {
 			req.Header.Set("Content-Type", "application/json")
 		}
 
 		recorder := httptest.NewRecorder()
 		mux.ServeHTTP(recorder, req)
+
 		return recorder
 	}
 
@@ -98,8 +117,10 @@ func TestIntegrationMenuAddonHTTP(t *testing.T) {
 
 		var result addonJSON
 		require.NoError(t, json.Unmarshal(
-			recorder.Body.Bytes(), &result,
+			recorder.Body.Bytes(),
+			&result,
 		))
+
 		return result
 	}
 
@@ -117,6 +138,7 @@ func TestIntegrationMenuAddonHTTP(t *testing.T) {
 			response.Body.String())
 
 		addon := decodeAddon(response)
+
 		var err error
 		addonID, err = uuid.Parse(addon.ID)
 		require.NoError(t, err)
@@ -132,7 +154,9 @@ func TestIntegrationMenuAddonHTTP(t *testing.T) {
 		require.NoError(t, err)
 
 		require.Equal(t, 1, integration.countEvents(
-			t, fixture.tenantID, addonID,
+			t,
+			fixture.tenantID,
+			addonID,
 			string(domain.EventTypeAddonCreated),
 		))
 	})
@@ -171,7 +195,8 @@ func TestIntegrationMenuAddonHTTP(t *testing.T) {
 		}
 
 		require.NoError(t, json.Unmarshal(
-			response.Body.Bytes(), &result,
+			response.Body.Bytes(),
+			&result,
 		))
 
 		require.Equal(t, 10, result.Limit)
@@ -196,7 +221,9 @@ func TestIntegrationMenuAddonHTTP(t *testing.T) {
 		require.Equal(t, "35.00", addon.Price)
 
 		require.Equal(t, 1, integration.countEvents(
-			t, fixture.tenantID, addonID,
+			t,
+			fixture.tenantID,
+			addonID,
 			string(domain.EventTypeAddonUpdated),
 		))
 	})
@@ -208,6 +235,7 @@ func TestIntegrationMenuAddonHTTP(t *testing.T) {
 			`{"name":`,
 			fixture.tenantID,
 		)
+
 		require.Equal(t, http.StatusBadRequest, response.Code)
 	})
 
@@ -218,6 +246,7 @@ func TestIntegrationMenuAddonHTTP(t *testing.T) {
 			`{"name":"Invalid","price":"10.00","unknown":true}`,
 			fixture.tenantID,
 		)
+
 		require.Equal(t, http.StatusBadRequest, response.Code)
 	})
 
@@ -228,6 +257,7 @@ func TestIntegrationMenuAddonHTTP(t *testing.T) {
 			`{"name":"Invalid Price","price":"not-money"}`,
 			fixture.tenantID,
 		)
+
 		require.Equal(t, http.StatusBadRequest, response.Code)
 	})
 
@@ -238,6 +268,7 @@ func TestIntegrationMenuAddonHTTP(t *testing.T) {
 			"",
 			fixture.tenantID,
 		)
+
 		require.Equal(t, http.StatusBadRequest, response.Code)
 	})
 
@@ -248,17 +279,20 @@ func TestIntegrationMenuAddonHTTP(t *testing.T) {
 			"",
 			fixture.tenantID,
 		)
+
 		require.Equal(t, http.StatusBadRequest, response.Code)
 	})
 
-	t.Run("missing tenant rejected", func(t *testing.T) {
+	t.Run("missing tenant header uses JWT tenant", func(t *testing.T) {
 		response := request(
 			http.MethodGet,
 			basePath+"/"+addonID.String(),
 			"",
 			uuid.Nil,
 		)
-		require.Equal(t, http.StatusUnauthorized, response.Code)
+
+		require.Equal(t, http.StatusOK, response.Code,
+			response.Body.String())
 	})
 
 	t.Run("other tenant cannot read addon", func(t *testing.T) {
@@ -268,7 +302,8 @@ func TestIntegrationMenuAddonHTTP(t *testing.T) {
 			"",
 			uuid.New(),
 		)
-		require.Equal(t, http.StatusNotFound, response.Code,
+
+		require.Equal(t, http.StatusForbidden, response.Code,
 			response.Body.String())
 	})
 
@@ -283,6 +318,7 @@ func TestIntegrationMenuAddonHTTP(t *testing.T) {
 			"",
 			fixture.tenantID,
 		)
+
 		require.Equal(t, http.StatusNotFound, response.Code,
 			response.Body.String())
 	})
@@ -302,7 +338,9 @@ func TestIntegrationMenuAddonHTTP(t *testing.T) {
 		require.False(t, addon.IsActive)
 
 		require.Equal(t, 1, integration.countEvents(
-			t, fixture.tenantID, addonID,
+			t,
+			fixture.tenantID,
+			addonID,
 			string(domain.EventTypeAddonDeactivated),
 		))
 	})
@@ -323,6 +361,7 @@ func TestIntegrationMenuAddonHTTP(t *testing.T) {
 			"",
 			fixture.tenantID,
 		)
+
 		require.Equal(t, http.StatusOK, verify.Code,
 			verify.Body.String())
 

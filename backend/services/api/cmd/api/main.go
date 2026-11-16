@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/afadnan/restaurantflow/services/api/internal/config"
+	"github.com/afadnan/restaurantflow/services/api/internal/middleware"
 	menuhttp "github.com/afadnan/restaurantflow/services/api/internal/modules/menu/delivery/http"
 	menurepository "github.com/afadnan/restaurantflow/services/api/internal/modules/menu/repository"
 	menuusecase "github.com/afadnan/restaurantflow/services/api/internal/modules/menu/usecase"
@@ -484,7 +485,7 @@ func run() error {
 	// -------------------------------------------------------------------------
 
 	mux := http.NewServeMux()
-
+	authMiddleware := middleware.AuthMiddleware(tokenService)
 	// -------------------------------------------------------------------------
 	// Public Owner Registration routes
 	// -------------------------------------------------------------------------
@@ -498,41 +499,47 @@ func run() error {
 		logoutHandler,
 	)
 
-	// Order routes
+	// Order routes — JWT authentication required.
 	httpdelivery.RegisterRoutes(
 		mux,
 		orderHandler,
 		nil,
+		authMiddleware,
 	)
 
-	// Restaurant routes
+	// Restaurant routes — JWT authentication required.
 	httprestaurant.RegisterRoutes(
 		mux,
 		restaurantHandler,
+		authMiddleware,
 	)
 
-	// Menu Category routes
+	// Menu Category routes — JWT authentication required.
 	menuhttp.RegisterCategoryRoutes(
 		mux,
 		menuCategoryHandler,
+		authMiddleware,
 	)
 
-	// Menu Item routes
+	// Menu Item routes — JWT authentication required.
 	menuhttp.RegisterItemRoutes(
 		mux,
 		menuItemHandler,
+		authMiddleware,
 	)
 
-	// Menu Add-on routes
+	// Menu Add-on routes — JWT authentication required.
 	menuhttp.RegisterAddonRoutes(
 		mux,
 		menuAddonHandler,
+		authMiddleware,
 	)
 
-	// Menu Item–Add-on routes
+	// Menu Item–Add-on routes — JWT authentication required.
 	menuhttp.RegisterItemAddonRoutes(
 		mux,
 		menuItemAddonHandler,
+		authMiddleware,
 	)
 
 	// -------------------------------------------------------------------------

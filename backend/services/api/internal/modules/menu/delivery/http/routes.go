@@ -6,29 +6,33 @@ import (
 	"github.com/afadnan/restaurantflow/services/api/internal/middleware"
 )
 
-func RegisterCategoryRoutes(mux *http.ServeMux, handler *CategoryHandler) {
+func RegisterCategoryRoutes(
+	mux *http.ServeMux,
+	handler *CategoryHandler,
+	authMiddleware func(http.Handler) http.Handler,
+) {
 	mux.Handle(
 		"POST /api/v1/restaurants/{restaurantID}/menu/categories",
-		middleware.TenantMiddleware(http.HandlerFunc(handler.CreateCategory)),
+		authMiddleware(middleware.TenantMiddleware(http.HandlerFunc(handler.CreateCategory))),
 	)
 
 	mux.Handle(
 		"GET /api/v1/restaurants/{restaurantID}/menu/categories",
-		middleware.TenantMiddleware(http.HandlerFunc(handler.ListCategories)),
+		authMiddleware(middleware.TenantMiddleware(http.HandlerFunc(handler.ListCategories))),
 	)
 
 	mux.Handle(
 		"GET /api/v1/restaurants/{restaurantID}/menu/categories/{categoryID}",
-		middleware.TenantMiddleware(http.HandlerFunc(handler.GetCategory)),
+		authMiddleware(middleware.TenantMiddleware(http.HandlerFunc(handler.GetCategory))),
 	)
 
 	mux.Handle(
 		"PUT /api/v1/restaurants/{restaurantID}/menu/categories/{categoryID}",
-		middleware.TenantMiddleware(http.HandlerFunc(handler.UpdateCategory)),
+		authMiddleware(middleware.TenantMiddleware(http.HandlerFunc(handler.UpdateCategory))),
 	)
 
 	mux.Handle(
 		"PATCH /api/v1/restaurants/{restaurantID}/menu/categories/{categoryID}/deactivate",
-		middleware.TenantMiddleware(http.HandlerFunc(handler.DeactivateCategory)),
+		authMiddleware(middleware.TenantMiddleware(http.HandlerFunc(handler.DeactivateCategory))),
 	)
 }

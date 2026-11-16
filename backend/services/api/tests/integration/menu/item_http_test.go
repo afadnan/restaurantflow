@@ -49,6 +49,9 @@ func TestIntegrationMenuItemHTTP(t *testing.T) {
 	require.NotEqual(t, uuid.Nil, categoryID)
 	require.NoError(t, tx.Rollback(ctx))
 
+	// Create a valid JWT for the fixture tenant.
+	authMiddleware, accessToken := newVariantAuth(t, fixture.tenantID)
+
 	// Wire the real repositories and transactional use cases.
 	deps := usecase.ItemUseCaseDependencies{
 		DB:     integration.db,
@@ -65,7 +68,7 @@ func TestIntegrationMenuItemHTTP(t *testing.T) {
 	)
 
 	mux := http.NewServeMux()
-	menuhttp.RegisterItemRoutes(mux, handler)
+	menuhttp.RegisterItemRoutes(mux, handler, authMiddleware)
 
 	basePath := fmt.Sprintf(
 		"/api/v1/restaurants/%s/menu/items",
@@ -88,6 +91,7 @@ func TestIntegrationMenuItemHTTP(t *testing.T) {
 	}
 
 	// Execute requests through the real HTTP router.
+	// Every request carries a valid access token.
 	request := func(
 		method, path, body string,
 		tenantID uuid.UUID,
@@ -105,6 +109,8 @@ func TestIntegrationMenuItemHTTP(t *testing.T) {
 			path,
 			strings.NewReader(body),
 		).WithContext(requestCtx)
+
+		req.Header.Set("Authorization", "Bearer "+accessToken)
 
 		if tenantID != uuid.Nil {
 			req.Header.Set("X-Tenant-ID", tenantID.String())
@@ -130,6 +136,7 @@ func TestIntegrationMenuItemHTTP(t *testing.T) {
 		require.NoError(
 			t,
 			json.Unmarshal(recorder.Body.Bytes(), &item),
+			recorder.Body.String(),
 		)
 
 		return item
@@ -138,18 +145,18 @@ func TestIntegrationMenuItemHTTP(t *testing.T) {
 	createBody := func(name, price string) string {
 		return fmt.Sprintf(
 			`{
-			"category_id": %q,
-			"name": %q,
-			"description": "HTTP integration test item",
-			"sku": %q,
-			"price": %q,
-			"status": "active",
-			"image_url": "",
-			"sort_order": 1,
-			"is_vegetarian": false,
-			"is_vegan": false,
-			"is_available": true
-		}`,
+				"category_id": %q,
+				"name": %q,
+				"description": "HTTP integration test item",
+				"sku": %q,
+				"price": %q,
+				"status": "active",
+				"image_url": "",
+				"sort_order": 1,
+				"is_vegetarian": false,
+				"is_vegan": false,
+				"is_available": true
+			}`,
 			categoryID.String(),
 			name,
 			"HTTP-"+uuid.NewString(),
@@ -176,10 +183,8 @@ func TestIntegrationMenuItemHTTP(t *testing.T) {
 
 		item := decodeItem(response)
 
-		var parseErr error
-		itemID, parseErr = uuid.Parse(item.ID)
-
-		require.NoError(t, parseErr)
+		itemID, err = uuid.Parse(item.ID)
+		require.NoError(t, err)
 		require.NotEqual(t, uuid.Nil, itemID)
 
 		require.Equal(t, fixture.tenantID.String(), item.TenantID)
@@ -190,8 +195,8 @@ func TestIntegrationMenuItemHTTP(t *testing.T) {
 		require.Equal(t, "active", item.Status)
 		require.True(t, item.IsAvailable)
 
-		_, parseErr = time.Parse(time.RFC3339, item.CreatedAt)
-		require.NoError(t, parseErr)
+		_, err = time.Parse(time.RFC3339, item.CreatedAt)
+		require.NoError(t, err)
 
 		require.Equal(t, 1, integration.countEvents(
 			t,
@@ -251,6 +256,7 @@ func TestIntegrationMenuItemHTTP(t *testing.T) {
 		require.NoError(
 			t,
 			json.Unmarshal(response.Body.Bytes(), &result),
+			response.Body.String(),
 		)
 
 		require.Equal(t, 100, result.Limit)
@@ -372,7 +378,7 @@ func TestIntegrationMenuItemHTTP(t *testing.T) {
 		require.Equal(t, http.StatusBadRequest, response.Code)
 	})
 
-	t.Run("missing tenant rejected", func(t *testing.T) {
+	t.Run("missing tenant header uses JWT tenant", func(t *testing.T) {
 		response := request(
 			http.MethodGet,
 			itemPath(),
@@ -380,10 +386,18 @@ func TestIntegrationMenuItemHTTP(t *testing.T) {
 			uuid.Nil,
 		)
 
-		require.Equal(t, http.StatusUnauthorized, response.Code)
+		require.Equal(
+			t,
+			http.StatusOK,
+			response.Code,
+			response.Body.String(),
+		)
+
+		item := decodeItem(response)
+		require.Equal(t, fixture.tenantID.String(), item.TenantID)
 	})
 
-	t.Run("different tenant cannot read item", func(t *testing.T) {
+	t.Run("tenant header mismatch is forbidden", func(t *testing.T) {
 		response := request(
 			http.MethodGet,
 			itemPath(),
@@ -393,7 +407,7 @@ func TestIntegrationMenuItemHTTP(t *testing.T) {
 
 		require.Equal(
 			t,
-			http.StatusNotFound,
+			http.StatusForbidden,
 			response.Code,
 			response.Body.String(),
 		)
@@ -448,4 +462,6 @@ func TestIntegrationMenuItemHTTP(t *testing.T) {
 		require.Equal(t, "inactive", item.Status)
 		require.False(t, item.IsAvailable)
 	})
+
+	_ = authMiddleware
 }

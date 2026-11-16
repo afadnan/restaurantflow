@@ -3,7 +3,7 @@ package menu_test
 import (
 	"context"
 	"errors"
-	"fmt"
+	"net/http"
 	"os"
 	"testing"
 	"time"
@@ -13,9 +13,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/afadnan/restaurantflow/services/api/internal/config"
+	"github.com/afadnan/restaurantflow/services/api/internal/middleware"
 	menudomain "github.com/afadnan/restaurantflow/services/api/internal/modules/menu/domain"
 	menurepository "github.com/afadnan/restaurantflow/services/api/internal/modules/menu/repository"
 	menuusecase "github.com/afadnan/restaurantflow/services/api/internal/modules/menu/usecase"
+	platformauth "github.com/afadnan/restaurantflow/services/api/internal/platform/auth"
 	"github.com/afadnan/restaurantflow/services/api/internal/platform/database"
 	"github.com/afadnan/restaurantflow/services/api/internal/platform/events"
 	"github.com/afadnan/restaurantflow/services/api/internal/platform/postgres"
@@ -124,6 +126,7 @@ func (integration *variantIntegration) createFixture(t *testing.T) variantFixtur
 	require.NoError(t, err)
 
 	require.NoError(t, tx.Commit(ctx))
+
 	return fixture
 }
 
@@ -264,11 +267,13 @@ func TestIntegrationMenuItemVariantCRUDAndTenantBoundary(t *testing.T) {
 	`, otherTenantID, "Other Variant Tenant",
 		"other-variant-"+otherTenantID.String())
 	require.NoError(t, err)
+
 	t.Cleanup(func() {
 		cleanupCtx, cleanupCancel := context.WithTimeout(
 			context.Background(), 10*time.Second,
 		)
 		defer cleanupCancel()
+
 		_, _ = integration.pool.Exec(
 			cleanupCtx, `DELETE FROM tenants WHERE id = $1`, otherTenantID,
 		)
@@ -319,7 +324,7 @@ func TestIntegrationMenuItemVariantCreateRollsBackWhenOutboxFails(t *testing.T) 
 	`, fixture.tenantID, fixture.restaurantID, fixture.itemID,
 		"Should Roll Back").Scan(&count)
 	require.NoError(t, err)
-	require.Zero(t, count, fmt.Sprintf("variant persisted after outbox failure"))
+	require.Zero(t, count, "variant persisted after outbox failure")
 }
 
 func TestIntegrationMenuDatabaseRoleEnforcesRLS(t *testing.T) {
@@ -362,4 +367,27 @@ func TestIntegrationMenuDatabaseRoleEnforcesRLS(t *testing.T) {
 	`).Scan(&ownsMenuCategories)
 	require.NoError(t, err)
 	require.False(t, ownsMenuCategories)
+}
+
+func newVariantAuth(
+	t *testing.T,
+	tenantID uuid.UUID,
+) (func(http.Handler) http.Handler, string) {
+	t.Helper()
+
+	tokenService, err := platformauth.NewTokenService(
+		"restaurantflow-integration-test-secret",
+		"restaurantflow-integration-test",
+		time.Hour,
+	)
+	require.NoError(t, err)
+
+	accessToken, _, err := tokenService.GenerateAccessToken(
+		uuid.New(),
+		tenantID,
+		"owner",
+	)
+	require.NoError(t, err)
+
+	return middleware.AuthMiddleware(tokenService), accessToken
 }
