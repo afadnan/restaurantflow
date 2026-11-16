@@ -38,7 +38,7 @@ FOR UPDATE;
 -- name: RotateRefreshToken :one
 UPDATE refresh_tokens
 SET
-    revoked_at = NOW(),
+    revoked_at = GREATEST(NOW(), created_at),
     replaced_by_token_id = $3
 WHERE tenant_id = $1
   AND id = $2
@@ -48,13 +48,17 @@ RETURNING *;
 
 -- name: RevokeRefreshTokenFamily :exec
 UPDATE refresh_tokens
-SET revoked_at = COALESCE(revoked_at, NOW())
+SET revoked_at = GREATEST(
+    COALESCE(revoked_at, NOW()),
+    created_at
+)
 WHERE tenant_id = $1
   AND family_id = $2;
 
+
 -- name: RevokeRefreshTokenByHash :exec
 UPDATE refresh_tokens
-SET revoked_at = NOW()
+SET revoked_at = GREATEST(NOW(), created_at)
 WHERE tenant_id = $1
   AND token_hash = $2
   AND revoked_at IS NULL;

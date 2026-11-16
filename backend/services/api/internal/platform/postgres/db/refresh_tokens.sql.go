@@ -128,7 +128,7 @@ func (q *Queries) LockRefreshTokenByHash(ctx context.Context, arg LockRefreshTok
 
 const revokeRefreshTokenByHash = `-- name: RevokeRefreshTokenByHash :exec
 UPDATE refresh_tokens
-SET revoked_at = NOW()
+SET revoked_at = GREATEST(NOW(), created_at)
 WHERE tenant_id = $1
   AND token_hash = $2
   AND revoked_at IS NULL
@@ -146,7 +146,10 @@ func (q *Queries) RevokeRefreshTokenByHash(ctx context.Context, arg RevokeRefres
 
 const revokeRefreshTokenFamily = `-- name: RevokeRefreshTokenFamily :exec
 UPDATE refresh_tokens
-SET revoked_at = COALESCE(revoked_at, NOW())
+SET revoked_at = GREATEST(
+    COALESCE(revoked_at, NOW()),
+    created_at
+)
 WHERE tenant_id = $1
   AND family_id = $2
 `
@@ -164,7 +167,7 @@ func (q *Queries) RevokeRefreshTokenFamily(ctx context.Context, arg RevokeRefres
 const rotateRefreshToken = `-- name: RotateRefreshToken :one
 UPDATE refresh_tokens
 SET
-    revoked_at = NOW(),
+    revoked_at = GREATEST(NOW(), created_at),
     replaced_by_token_id = $3
 WHERE tenant_id = $1
   AND id = $2

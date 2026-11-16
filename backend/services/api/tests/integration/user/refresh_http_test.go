@@ -234,6 +234,94 @@ func TestIntegrationRefreshHTTP(t *testing.T) {
 	})
 
 	// ---------------------------------------------------------
+	// Test 2: Concurrent refresh requests
+	// ---------------------------------------------------------
+
+	t.Run("concurrent refresh requests cannot create two valid sessions", func(t *testing.T) {
+		concurrentLogin, err := loginUseCase.Execute(
+			ctx,
+			userusecase.LoginInput{
+				BusinessSlug: slug,
+				Email:        "refresh-owner@example.com",
+				Password:     integrationLoginPassword,
+			},
+		)
+		require.NoError(t, err)
+		require.NotNil(t, concurrentLogin)
+		require.NotEmpty(t, concurrentLogin.RefreshToken)
+
+		start := make(chan struct{})
+		results := make(chan *httptest.ResponseRecorder, 2)
+
+		for range 2 {
+			go func() {
+				<-start
+				results <- sendRefreshRequest(
+					tenantID.String(),
+					concurrentLogin.RefreshToken,
+				)
+			}()
+		}
+
+		// Release both requests together.
+		close(start)
+
+		first := <-results
+		second := <-results
+
+		successCount := 0
+		unauthorizedCount := 0
+		var successfulResponse *httptest.ResponseRecorder
+
+		for _, recorder := range []*httptest.ResponseRecorder{first, second} {
+			switch recorder.Code {
+			case http.StatusOK:
+				successCount++
+				successfulResponse = recorder
+
+			case http.StatusUnauthorized:
+				unauthorizedCount++
+
+			default:
+				require.Failf(
+					t,
+					"unexpected concurrent refresh response",
+					"status: %d, body: %s",
+					recorder.Code,
+					recorder.Body.String(),
+				)
+			}
+		}
+
+		require.Equal(t, 1, successCount)
+		require.Equal(t, 1, unauthorizedCount)
+		require.NotNil(t, successfulResponse)
+
+		var response struct {
+			RefreshToken string `json:"refresh_token"`
+		}
+
+		require.NoError(
+			t,
+			json.Unmarshal(successfulResponse.Body.Bytes(), &response),
+		)
+		require.NotEmpty(t, response.RefreshToken)
+
+		// Replay detection must revoke the replacement token too.
+		replacementRecorder := sendRefreshRequest(
+			tenantID.String(),
+			response.RefreshToken,
+		)
+
+		require.Equal(
+			t,
+			http.StatusUnauthorized,
+			replacementRecorder.Code,
+			replacementRecorder.Body.String(),
+		)
+	})
+
+	// ---------------------------------------------------------
 	// Test 2: Unknown refresh token is rejected
 	// ---------------------------------------------------------
 
