@@ -30,6 +30,13 @@ type RefreshTokenRepository interface {
 		tokenHash []byte,
 	) (*domain.RefreshToken, error)
 
+	RevokeByHash(
+		ctx context.Context,
+		tx *postgres.Tx,
+		tenantID uuid.UUID,
+		tokenHash []byte,
+	) error
+
 	Rotate(
 		ctx context.Context,
 		tx *postgres.Tx,

@@ -247,3 +247,72 @@ func (h *RefreshHandler) Refresh(
 		newRefreshResponse(result),
 	)
 }
+
+// LogoutHandler handles public refresh-token revocation requests.
+type LogoutHandler struct {
+	LogoutUseCase *usecase.LogoutUseCase
+}
+
+func NewLogoutHandler(
+	logoutUseCase *usecase.LogoutUseCase,
+) *LogoutHandler {
+	return &LogoutHandler{
+		LogoutUseCase: logoutUseCase,
+	}
+}
+
+func (h *LogoutHandler) Logout(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	if h == nil || h.LogoutUseCase == nil {
+		http.Error(
+			w,
+			http.StatusText(http.StatusInternalServerError),
+			http.StatusInternalServerError,
+		)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(
+		w,
+		r.Body,
+		maxRefreshBodyBytes,
+	)
+
+	var request refreshRequest
+
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+
+	if err := decoder.Decode(&request); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	tenantID, err := uuid.Parse(request.TenantID)
+	if err != nil || tenantID == uuid.Nil {
+		http.Error(w, "invalid logout details", http.StatusBadRequest)
+		return
+	}
+
+	err = h.LogoutUseCase.Execute(
+		r.Context(),
+		usecase.LogoutInput{
+			TenantID:     tenantID,
+			RefreshToken: request.RefreshToken,
+		},
+	)
+	if err != nil {
+		writeLogoutError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}

@@ -452,6 +452,13 @@ func run() error {
 
 	refreshHandler := userhttp.NewRefreshHandler(refreshUseCase)
 
+	logoutUseCase := &userusecase.LogoutUseCase{
+		DB:            db,
+		RefreshTokens: refreshTokenRepository,
+	}
+
+	logoutHandler := userhttp.NewLogoutHandler(logoutUseCase)
+
 	// -------------------------------------------------------------------------
 	// Menu Add-on HTTP handler
 	// -------------------------------------------------------------------------
@@ -488,6 +495,7 @@ func run() error {
 		ownerRegistrationHandler,
 		ownerLoginHandler,
 		refreshHandler,
+		logoutHandler,
 	)
 
 	// Order routes

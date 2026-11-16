@@ -109,3 +109,24 @@ func writeRefreshError(
 		)
 	}
 }
+
+func writeLogoutError(
+	w http.ResponseWriter,
+	err error,
+) {
+	switch {
+	case errors.Is(err, usecase.ErrInvalidLogoutInput):
+		http.Error(
+			w,
+			"invalid logout details",
+			http.StatusBadRequest,
+		)
+
+	default:
+		http.Error(
+			w,
+			http.StatusText(http.StatusInternalServerError),
+			http.StatusInternalServerError,
+		)
+	}
+}

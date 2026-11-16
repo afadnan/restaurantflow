@@ -68,6 +68,7 @@ type Querier interface {
 	LockRefreshTokenByHash(ctx context.Context, arg LockRefreshTokenByHashParams) (RefreshToken, error)
 	MarkOutboxEventFailed(ctx context.Context, arg MarkOutboxEventFailedParams) error
 	MarkOutboxEventPublished(ctx context.Context, arg MarkOutboxEventPublishedParams) error
+	RevokeRefreshTokenByHash(ctx context.Context, arg RevokeRefreshTokenByHashParams) error
 	RevokeRefreshTokenFamily(ctx context.Context, arg RevokeRefreshTokenFamilyParams) error
 	RotateRefreshToken(ctx context.Context, arg RotateRefreshTokenParams) (RefreshToken, error)
 	SuspendRestaurant(ctx context.Context, arg SuspendRestaurantParams) (Restaurant, error)

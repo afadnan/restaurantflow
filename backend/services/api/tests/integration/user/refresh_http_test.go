@@ -64,7 +64,7 @@ func TestIntegrationRefreshHTTP(t *testing.T) {
 	refreshHandler := userhttp.NewRefreshHandler(refreshUseCase)
 
 	mux := http.NewServeMux()
-	userhttp.RegisterRoutes(mux, nil, nil, refreshHandler)
+	userhttp.RegisterRoutes(mux, nil, nil, refreshHandler, nil)
 
 	sendRefreshRequest := func(
 		requestTenantID string,

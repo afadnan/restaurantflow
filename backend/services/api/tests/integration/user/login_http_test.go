@@ -43,7 +43,7 @@ func TestIntegrationOwnerLoginHTTP(t *testing.T) {
 	loginHandler := userhttp.NewOwnerLoginHandler(loginUseCase)
 
 	mux := http.NewServeMux()
-	userhttp.RegisterRoutes(mux, registrationHandler, loginHandler, nil)
+	userhttp.RegisterRoutes(mux, registrationHandler, loginHandler, nil, nil)
 
 	sendLoginRequest := func(body string) *httptest.ResponseRecorder {
 		t.Helper()

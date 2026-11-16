@@ -11,6 +11,7 @@ func RegisterRoutes(
 	registrationHandler *OwnerRegistrationHandler,
 	loginHandler *OwnerLoginHandler,
 	refreshHandler *RefreshHandler,
+	logoutHandler *LogoutHandler,
 ) {
 	mux.HandleFunc(
 		"POST /api/v1/auth/register/owner",
@@ -25,5 +26,10 @@ func RegisterRoutes(
 	mux.HandleFunc(
 		"POST /api/v1/auth/refresh",
 		refreshHandler.Refresh,
+	)
+
+	mux.HandleFunc(
+		"POST /api/v1/auth/logout",
+		logoutHandler.Logout,
 	)
 }

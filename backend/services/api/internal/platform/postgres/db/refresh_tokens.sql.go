@@ -126,6 +126,24 @@ func (q *Queries) LockRefreshTokenByHash(ctx context.Context, arg LockRefreshTok
 	return i, err
 }
 
+const revokeRefreshTokenByHash = `-- name: RevokeRefreshTokenByHash :exec
+UPDATE refresh_tokens
+SET revoked_at = NOW()
+WHERE tenant_id = $1
+  AND token_hash = $2
+  AND revoked_at IS NULL
+`
+
+type RevokeRefreshTokenByHashParams struct {
+	TenantID  pgtype.UUID `json:"tenant_id"`
+	TokenHash []byte      `json:"token_hash"`
+}
+
+func (q *Queries) RevokeRefreshTokenByHash(ctx context.Context, arg RevokeRefreshTokenByHashParams) error {
+	_, err := q.db.Exec(ctx, revokeRefreshTokenByHash, arg.TenantID, arg.TokenHash)
+	return err
+}
+
 const revokeRefreshTokenFamily = `-- name: RevokeRefreshTokenFamily :exec
 UPDATE refresh_tokens
 SET revoked_at = COALESCE(revoked_at, NOW())

@@ -51,3 +51,10 @@ UPDATE refresh_tokens
 SET revoked_at = COALESCE(revoked_at, NOW())
 WHERE tenant_id = $1
   AND family_id = $2;
+
+-- name: RevokeRefreshTokenByHash :exec
+UPDATE refresh_tokens
+SET revoked_at = NOW()
+WHERE tenant_id = $1
+  AND token_hash = $2
+  AND revoked_at IS NULL;

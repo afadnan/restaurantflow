@@ -159,6 +159,39 @@ func (r *PostgresRefreshTokenRepository) Rotate(
 	return nil
 }
 
+func (r *PostgresRefreshTokenRepository) RevokeByHash(
+	ctx context.Context,
+	tx *postgres.Tx,
+	tenantID uuid.UUID,
+	tokenHash []byte,
+) error {
+	if tx == nil {
+		return ErrInvalidTx
+	}
+
+	if tenantID == uuid.Nil {
+		return domain.ErrInvalidRefreshTokenTenantID
+	}
+
+	if len(tokenHash) != domain.RefreshTokenHashLength {
+		return domain.ErrInvalidRefreshTokenHash
+	}
+
+	q := db.New(tx.Raw())
+
+	if err := q.RevokeRefreshTokenByHash(
+		ctx,
+		db.RevokeRefreshTokenByHashParams{
+			TenantID:  toPgUUID(tenantID),
+			TokenHash: tokenHash,
+		},
+	); err != nil {
+		return fmt.Errorf("revoke refresh token by hash: %w", err)
+	}
+
+	return nil
+}
+
 func (r *PostgresRefreshTokenRepository) RevokeFamily(
 	ctx context.Context,
 	tx *postgres.Tx,
