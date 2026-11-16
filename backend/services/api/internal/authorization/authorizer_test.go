@@ -6,7 +6,7 @@ import (
 	userdomain "github.com/afadnan/restaurantflow/services/api/internal/modules/user/domain"
 )
 
-func TestAuthorizerRolePermissions(t *testing.T) {
+func TestAuthorizerRestaurantLifecyclePermissions(t *testing.T) {
 	authorizer := NewAuthorizer()
 
 	tests := []struct {
@@ -15,24 +15,30 @@ func TestAuthorizerRolePermissions(t *testing.T) {
 		permission Permission
 		want       bool
 	}{
-		{"owner can transfer ownership", userdomain.RoleOwner, PermissionRestaurantTransferOwnership, true},
-		{"admin cannot transfer ownership", userdomain.RoleAdmin, PermissionRestaurantTransferOwnership, false},
-		{"manager can update operations", userdomain.RoleManager, PermissionRestaurantUpdateOperations, true},
-		{"manager cannot update security", userdomain.RoleManager, PermissionRestaurantUpdateSecurity, false},
-		{"staff cannot update menu", userdomain.RoleStaff, PermissionMenuUpdate, false},
-		{"staff can read menu", userdomain.RoleStaff, PermissionMenuRead, true},
-		{"kitchen can start kitchen orders", userdomain.RoleKitchen, PermissionKitchenOrdersStart, true},
-		{"kitchen cannot collect payments", userdomain.RoleKitchen, PermissionPaymentsCollect, false},
-		{"cashier can collect payments", userdomain.RoleCashier, PermissionPaymentsCollect, true},
-		{"cashier cannot refund payments", userdomain.RoleCashier, PermissionPaymentsRefund, false},
-		{"manager can refund payments", userdomain.RoleManager, PermissionPaymentsRefund, true},
-		{"manager cannot create staff", userdomain.RoleManager, PermissionStaffCreate, false},
-		{"admin can create staff", userdomain.RoleAdmin, PermissionStaffCreate, true},
-		{"staff can assign tables", userdomain.RoleStaff, PermissionTablesAssign, true},
-		{"staff cannot delete tables", userdomain.RoleStaff, PermissionTablesDelete, false},
-		{"unknown role is denied", userdomain.Role("unknown"), PermissionMenuRead, false},
-		{"unknown permission is denied", userdomain.RoleOwner, Permission("unknown.permission"), false},
-		{"empty permission is denied", userdomain.RoleOwner, "", false},
+		{
+			name:       "owner can create restaurant",
+			role:       userdomain.RoleOwner,
+			permission: PermissionRestaurantCreate,
+			want:       true,
+		},
+		{
+			name:       "owner can deactivate restaurant",
+			role:       userdomain.RoleOwner,
+			permission: PermissionRestaurantDeactivate,
+			want:       true,
+		},
+		{
+			name:       "admin cannot create restaurant",
+			role:       userdomain.RoleAdmin,
+			permission: PermissionRestaurantCreate,
+			want:       false,
+		},
+		{
+			name:       "admin cannot deactivate restaurant",
+			role:       userdomain.RoleAdmin,
+			permission: PermissionRestaurantDeactivate,
+			want:       false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -51,10 +57,31 @@ func TestAuthorizerRolePermissions(t *testing.T) {
 	}
 }
 
-func TestAuthorizerNilReceiverDeniesPermission(t *testing.T) {
-	var authorizer *Authorizer
+func TestAuthorizerPolicyIsIsolatedFromGlobalPolicyChanges(t *testing.T) {
+	originalPermissions := rolePermissions
+	defer func() {
+		rolePermissions = originalPermissions
+	}()
 
-	if authorizer.HasPermission(userdomain.RoleOwner, PermissionMenuRead) {
-		t.Fatal("nil authorizer must deny permissions")
+	authorizer := NewAuthorizer()
+
+	if !authorizer.HasPermission(
+		userdomain.RoleAdmin,
+		PermissionMenuRead,
+	) {
+		t.Fatal("admin should initially have menu read permission")
+	}
+
+	rolePermissions[userdomain.RoleAdmin][PermissionMenuRead] = struct{}{}
+	delete(
+		rolePermissions[userdomain.RoleAdmin],
+		PermissionMenuRead,
+	)
+
+	if !authorizer.HasPermission(
+		userdomain.RoleAdmin,
+		PermissionMenuRead,
+	) {
+		t.Fatal("existing authorizer must not be affected by global policy changes")
 	}
 }

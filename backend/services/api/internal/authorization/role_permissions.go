@@ -73,11 +73,9 @@ var rolePermissions = map[userdomain.Role]map[Permission]struct{}{
 
 	userdomain.RoleAdmin: permissionSet(
 		PermissionRestaurantRead,
-		PermissionRestaurantCreate,
 		PermissionRestaurantUpdateProfile,
 		PermissionRestaurantUpdateHours,
 		PermissionRestaurantUpdateOperations,
-		PermissionRestaurantDeactivate,
 
 		PermissionStaffRead,
 		PermissionStaffCreate,

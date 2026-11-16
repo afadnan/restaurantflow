@@ -7,10 +7,29 @@ type Authorizer struct {
 	permissions map[userdomain.Role]map[Permission]struct{}
 }
 
-// NewAuthorizer creates an authorizer using the application's RBAC policy.
+// NewAuthorizer creates an authorizer using an isolated copy of the
+// application's RBAC policy.
 func NewAuthorizer() *Authorizer {
+	permissions := make(
+		map[userdomain.Role]map[Permission]struct{},
+		len(rolePermissions),
+	)
+
+	for role, rolePermissionSet := range rolePermissions {
+		copiedSet := make(
+			map[Permission]struct{},
+			len(rolePermissionSet),
+		)
+
+		for permission := range rolePermissionSet {
+			copiedSet[permission] = struct{}{}
+		}
+
+		permissions[role] = copiedSet
+	}
+
 	return &Authorizer{
-		permissions: rolePermissions,
+		permissions: permissions,
 	}
 }
 
