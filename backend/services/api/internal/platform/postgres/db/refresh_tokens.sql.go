@@ -19,10 +19,11 @@ INSERT INTO refresh_tokens (
     user_id,
     token_hash,
     family_id,
-    expires_at
+    expires_at,
+    created_at
 )
 VALUES (
-    $1, $2, $3, $4, $5, $6
+    $1, $2, $3, $4, $5, $6, $7
 )
 RETURNING id, tenant_id, user_id, token_hash, family_id, expires_at, revoked_at, replaced_by_token_id, created_at
 `
@@ -34,6 +35,7 @@ type CreateRefreshTokenParams struct {
 	TokenHash []byte             `json:"token_hash"`
 	FamilyID  pgtype.UUID        `json:"family_id"`
 	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 // ============================================================
@@ -48,6 +50,7 @@ func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshToken
 		arg.TokenHash,
 		arg.FamilyID,
 		arg.ExpiresAt,
+		arg.CreatedAt,
 	)
 	var i RefreshToken
 	err := row.Scan(

@@ -29,7 +29,7 @@ func TestIntegrationRefreshHTTP(t *testing.T) {
 	defer cancel()
 
 	tenantID := i.createTenant(t)
-	slug := "refresh-it-" + tenantID.String()
+	slug := "user-it-" + tenantID.String()
 
 	user := createLoginTestUser(
 		t,

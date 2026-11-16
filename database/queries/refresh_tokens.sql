@@ -11,10 +11,11 @@ INSERT INTO refresh_tokens (
     user_id,
     token_hash,
     family_id,
-    expires_at
+    expires_at,
+    created_at
 )
 VALUES (
-    $1, $2, $3, $4, $5, $6
+    $1, $2, $3, $4, $5, $6, $7
 )
 RETURNING *;
 

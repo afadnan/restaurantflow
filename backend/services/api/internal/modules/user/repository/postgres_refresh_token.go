@@ -47,6 +47,7 @@ func (r *PostgresRefreshTokenRepository) Create(
 		TokenHash: token.TokenHash,
 		FamilyID:  toPgUUID(token.FamilyID),
 		ExpiresAt: toPgTimestamptz(token.ExpiresAt),
+		CreatedAt: toPgTimestamptz(token.CreatedAt),
 	})
 	if err != nil {
 		return fmt.Errorf("create refresh token: %w", err)
