@@ -24,7 +24,7 @@ type Querier interface {
 	// Create a variant only when its parent item belongs to the tenant and restaurant.
 	CreateMenuItemVariant(ctx context.Context, arg CreateMenuItemVariantParams) (CreateMenuItemVariantRow, error)
 	CreateOrder(ctx context.Context, arg CreateOrderParams) (Order, error)
-	CreateOrderItem(ctx context.Context, arg CreateOrderItemParams) (OrderItem, error)
+	CreateOrderItem(ctx context.Context, arg CreateOrderItemParams) (CreateOrderItemRow, error)
 	CreateOutboxEvent(ctx context.Context, arg CreateOutboxEventParams) error
 	// ============================================================
 	// RestaurantFlow.fun
@@ -49,7 +49,7 @@ type Querier interface {
 	GetMenuItemAddon(ctx context.Context, arg GetMenuItemAddonParams) (GetMenuItemAddonRow, error)
 	GetMenuItemVariantByID(ctx context.Context, arg GetMenuItemVariantByIDParams) (GetMenuItemVariantByIDRow, error)
 	GetOrderByID(ctx context.Context, arg GetOrderByIDParams) (Order, error)
-	GetOrderItemByID(ctx context.Context, arg GetOrderItemByIDParams) (OrderItem, error)
+	GetOrderItemByID(ctx context.Context, arg GetOrderItemByIDParams) (GetOrderItemByIDRow, error)
 	GetRefreshTokenByHash(ctx context.Context, arg GetRefreshTokenByHashParams) (RefreshToken, error)
 	GetRestaurantByID(ctx context.Context, arg GetRestaurantByIDParams) (Restaurant, error)
 	GetRestaurantBySlug(ctx context.Context, arg GetRestaurantBySlugParams) (Restaurant, error)
@@ -62,7 +62,7 @@ type Querier interface {
 	ListMenuItemAddons(ctx context.Context, arg ListMenuItemAddonsParams) ([]ListMenuItemAddonsRow, error)
 	ListMenuItemVariants(ctx context.Context, arg ListMenuItemVariantsParams) ([]ListMenuItemVariantsRow, error)
 	ListMenuItems(ctx context.Context, arg ListMenuItemsParams) ([]ListMenuItemsRow, error)
-	ListOrderItems(ctx context.Context, arg ListOrderItemsParams) ([]OrderItem, error)
+	ListOrderItems(ctx context.Context, arg ListOrderItemsParams) ([]ListOrderItemsRow, error)
 	ListOrders(ctx context.Context, arg ListOrdersParams) ([]Order, error)
 	ListRestaurants(ctx context.Context, arg ListRestaurantsParams) ([]Restaurant, error)
 	LockRefreshTokenByHash(ctx context.Context, arg LockRefreshTokenByHashParams) (RefreshToken, error)

@@ -1,29 +1,44 @@
 package httpdelivery
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 
 	"github.com/google/uuid"
 
+	"github.com/afadnan/restaurantflow/services/api/internal/authorization"
 	"github.com/afadnan/restaurantflow/services/api/internal/middleware"
 	"github.com/afadnan/restaurantflow/services/api/internal/modules/order/domain"
 	"github.com/afadnan/restaurantflow/services/api/internal/modules/order/usecase"
+	userdomain "github.com/afadnan/restaurantflow/services/api/internal/modules/user/domain"
 )
+
+// UpdateKDSStateExecutor defines the KDS state update operation.
+// The concrete use case satisfies this interface.
+type UpdateKDSStateExecutor interface {
+	Execute(
+		ctx context.Context,
+		input usecase.UpdateKDSStateInput,
+	) error
+}
 
 type OrderHandler struct {
 	CreateOrderUseCase    *usecase.CreateOrderUseCase
-	UpdateKDSStateUseCase *usecase.UpdateKDSStateUseCase
+	UpdateKDSStateUseCase UpdateKDSStateExecutor
+	Authorizer            *authorization.Authorizer
 }
 
 func NewOrderHandler(
 	createOrder *usecase.CreateOrderUseCase,
-	updateKDSState *usecase.UpdateKDSStateUseCase,
+	updateKDSState UpdateKDSStateExecutor,
+	authorizer *authorization.Authorizer,
 ) *OrderHandler {
 	return &OrderHandler{
 		CreateOrderUseCase:    createOrder,
 		UpdateKDSStateUseCase: updateKDSState,
+		Authorizer:            authorizer,
 	}
 }
 
@@ -61,11 +76,12 @@ func (h *OrderHandler) CreateOrder(
 ) {
 	tenantID, err := middleware.TenantFromContext(r.Context())
 	if err != nil {
-		http.Error(
-			w,
-			"tenant context required",
-			http.StatusUnauthorized,
-		)
+		http.Error(w, "tenant context required", http.StatusUnauthorized)
+		return
+	}
+
+	if h.CreateOrderUseCase == nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
@@ -75,20 +91,12 @@ func (h *OrderHandler) CreateOrder(
 	decoder.DisallowUnknownFields()
 
 	if err := decoder.Decode(&request); err != nil {
-		http.Error(
-			w,
-			"invalid request body",
-			http.StatusBadRequest,
-		)
+		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
 
 	if request.RestaurantID == uuid.Nil {
-		http.Error(
-			w,
-			"restaurant_id is required",
-			http.StatusBadRequest,
-		)
+		http.Error(w, "restaurant_id is required", http.StatusBadRequest)
 		return
 	}
 
@@ -99,16 +107,13 @@ func (h *OrderHandler) CreateOrder(
 	)
 
 	for _, item := range request.Items {
-		items = append(
-			items,
-			usecase.CreateOrderItemInput{
-				ProductID: item.ProductID,
-				Name:      item.Name,
-				Quantity:  item.Quantity,
-				UnitPrice: item.UnitPrice,
-				Notes:     item.Notes,
-			},
-		)
+		items = append(items, usecase.CreateOrderItemInput{
+			ProductID: item.ProductID,
+			Name:      item.Name,
+			Quantity:  item.Quantity,
+			UnitPrice: item.UnitPrice,
+			Notes:     item.Notes,
+		})
 	}
 
 	order, err := h.CreateOrderUseCase.Execute(
@@ -135,11 +140,7 @@ func (h *OrderHandler) CreateOrder(
 		return
 	}
 
-	writeJSON(
-		w,
-		http.StatusCreated,
-		order,
-	)
+	writeJSON(w, http.StatusCreated, order)
 }
 
 type updateKDSStateRequest struct {
@@ -152,23 +153,13 @@ func (h *OrderHandler) UpdateKDSState(
 ) {
 	tenantID, err := middleware.TenantFromContext(r.Context())
 	if err != nil {
-		http.Error(
-			w,
-			"tenant context required",
-			http.StatusUnauthorized,
-		)
+		http.Error(w, "tenant context required", http.StatusUnauthorized)
 		return
 	}
 
-	orderID, err := uuid.Parse(
-		r.PathValue("orderID"),
-	)
+	orderID, err := uuid.Parse(r.PathValue("orderID"))
 	if err != nil || orderID == uuid.Nil {
-		http.Error(
-			w,
-			"invalid order id",
-			http.StatusBadRequest,
-		)
+		http.Error(w, "invalid order id", http.StatusBadRequest)
 		return
 	}
 
@@ -178,14 +169,71 @@ func (h *OrderHandler) UpdateKDSState(
 	decoder.DisallowUnknownFields()
 
 	if err := decoder.Decode(&request); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate the requested KDS state before checking permissions.
+	if !request.State.Valid() {
+		writeDomainError(w, domain.ErrInvalidKDSState)
+		return
+	}
+
+	// Each KDS transition requires its own permission.
+	var requiredPermission authorization.Permission
+
+	switch request.State {
+	case domain.KDSStatePreparing:
+		requiredPermission = authorization.PermissionKitchenOrdersStart
+
+	case domain.KDSStateReady:
+		requiredPermission = authorization.PermissionKitchenOrdersMarkReady
+
+	case domain.KDSStateCompleted:
+		requiredPermission = authorization.PermissionKitchenOrdersComplete
+
+	case domain.KDSStatePending:
+		// Pending is an initial state, not a valid transition target.
+		writeDomainError(w, domain.ErrInvalidStateTransition)
+		return
+
+	default:
+		writeDomainError(w, domain.ErrInvalidKDSState)
+		return
+	}
+
+	// The authentication middleware should have populated the role.
+	role, err := middleware.RoleFromContext(r.Context())
+	if err != nil {
 		http.Error(
 			w,
-			"invalid request body",
-			http.StatusBadRequest,
+			middleware.ErrAuthenticationRequired.Error(),
+			http.StatusUnauthorized,
 		)
 		return
 	}
 
+	// Deny access if the authorizer is unavailable or the role
+	// does not have permission for the requested transition.
+	if h.Authorizer == nil ||
+		!h.Authorizer.HasPermission(
+			userdomain.Role(role),
+			requiredPermission,
+		) {
+		http.Error(
+			w,
+			middleware.ErrPermissionDenied,
+			http.StatusForbidden,
+		)
+		return
+	}
+
+	if h.UpdateKDSStateUseCase == nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Only authorized requests reach the use case.
 	err = h.UpdateKDSStateUseCase.Execute(
 		r.Context(),
 		usecase.UpdateKDSStateInput{

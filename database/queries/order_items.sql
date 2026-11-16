@@ -1,6 +1,8 @@
+
 -- name: CreateOrderItem :one
 INSERT INTO order_items (
     tenant_id,
+    restaurant_id,
     order_id,
     menu_item_id,
     item_name,
@@ -17,11 +19,13 @@ VALUES (
     $5,
     $6,
     $7,
-    $8
+    $8,
+    $9
 )
 RETURNING
     id,
     tenant_id,
+    restaurant_id,
     order_id,
     menu_item_id,
     item_name,
@@ -36,6 +40,7 @@ RETURNING
 SELECT
     id,
     tenant_id,
+    restaurant_id,
     order_id,
     menu_item_id,
     item_name,
@@ -53,6 +58,7 @@ WHERE tenant_id = $1
 SELECT
     id,
     tenant_id,
+    restaurant_id,
     order_id,
     menu_item_id,
     item_name,

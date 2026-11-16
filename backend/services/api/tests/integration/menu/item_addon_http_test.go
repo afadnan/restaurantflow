@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
+	"github.com/afadnan/restaurantflow/services/api/internal/authorization"
 	menuhttp "github.com/afadnan/restaurantflow/services/api/internal/modules/menu/delivery/http"
 	"github.com/afadnan/restaurantflow/services/api/internal/modules/menu/domain"
 	"github.com/afadnan/restaurantflow/services/api/internal/modules/menu/repository"
@@ -65,17 +66,20 @@ func TestIntegrationMenuItemAddonHTTP(t *testing.T) {
 	)
 
 	mux := http.NewServeMux()
+	authorizer := authorization.NewAuthorizer()
 
 	menuhttp.RegisterAddonRoutes(
 		mux,
 		addonHandler,
 		authMiddleware,
+		authorizer,
 	)
 
 	menuhttp.RegisterItemAddonRoutes(
 		mux,
 		itemAddonHandler,
 		authMiddleware,
+		authorizer,
 	)
 
 	addonBasePath := fmt.Sprintf(

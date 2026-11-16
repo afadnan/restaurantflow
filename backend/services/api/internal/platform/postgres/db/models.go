@@ -479,13 +479,14 @@ type Inventory struct {
 }
 
 type KdsStatusHistory struct {
-	ID          pgtype.UUID        `json:"id"`
-	TenantID    pgtype.UUID        `json:"tenant_id"`
-	KdsTicketID pgtype.UUID        `json:"kds_ticket_id"`
-	FromStatus  NullKdsStatus      `json:"from_status"`
-	ToStatus    KdsStatus          `json:"to_status"`
-	ChangedBy   pgtype.UUID        `json:"changed_by"`
-	ChangedAt   pgtype.Timestamptz `json:"changed_at"`
+	ID           pgtype.UUID        `json:"id"`
+	TenantID     pgtype.UUID        `json:"tenant_id"`
+	KdsTicketID  pgtype.UUID        `json:"kds_ticket_id"`
+	FromStatus   NullKdsStatus      `json:"from_status"`
+	ToStatus     KdsStatus          `json:"to_status"`
+	ChangedBy    pgtype.UUID        `json:"changed_by"`
+	ChangedAt    pgtype.Timestamptz `json:"changed_at"`
+	RestaurantID pgtype.UUID        `json:"restaurant_id"`
 }
 
 type KdsTicket struct {
@@ -503,14 +504,16 @@ type KdsTicket struct {
 }
 
 type KdsTicketItem struct {
-	ID          pgtype.UUID        `json:"id"`
-	TenantID    pgtype.UUID        `json:"tenant_id"`
-	KdsTicketID pgtype.UUID        `json:"kds_ticket_id"`
-	OrderItemID pgtype.UUID        `json:"order_item_id"`
-	ItemName    string             `json:"item_name"`
-	Quantity    int32              `json:"quantity"`
-	Notes       pgtype.Text        `json:"notes"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	ID           pgtype.UUID        `json:"id"`
+	TenantID     pgtype.UUID        `json:"tenant_id"`
+	KdsTicketID  pgtype.UUID        `json:"kds_ticket_id"`
+	OrderItemID  pgtype.UUID        `json:"order_item_id"`
+	ItemName     string             `json:"item_name"`
+	Quantity     int32              `json:"quantity"`
+	Notes        pgtype.Text        `json:"notes"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	RestaurantID pgtype.UUID        `json:"restaurant_id"`
+	OrderID      pgtype.UUID        `json:"order_id"`
 }
 
 type MenuAddon struct {
@@ -610,27 +613,29 @@ type Order struct {
 }
 
 type OrderItem struct {
-	ID         pgtype.UUID        `json:"id"`
-	TenantID   pgtype.UUID        `json:"tenant_id"`
-	OrderID    pgtype.UUID        `json:"order_id"`
-	MenuItemID pgtype.UUID        `json:"menu_item_id"`
-	ItemName   string             `json:"item_name"`
-	UnitPrice  pgtype.Numeric     `json:"unit_price"`
-	Quantity   int32              `json:"quantity"`
-	Subtotal   pgtype.Numeric     `json:"subtotal"`
-	Notes      pgtype.Text        `json:"notes"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	ID           pgtype.UUID        `json:"id"`
+	TenantID     pgtype.UUID        `json:"tenant_id"`
+	OrderID      pgtype.UUID        `json:"order_id"`
+	MenuItemID   pgtype.UUID        `json:"menu_item_id"`
+	ItemName     string             `json:"item_name"`
+	UnitPrice    pgtype.Numeric     `json:"unit_price"`
+	Quantity     int32              `json:"quantity"`
+	Subtotal     pgtype.Numeric     `json:"subtotal"`
+	Notes        pgtype.Text        `json:"notes"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	RestaurantID pgtype.UUID        `json:"restaurant_id"`
 }
 
 type OrderItemAddon struct {
-	ID          pgtype.UUID    `json:"id"`
-	TenantID    pgtype.UUID    `json:"tenant_id"`
-	OrderItemID pgtype.UUID    `json:"order_item_id"`
-	AddonID     pgtype.UUID    `json:"addon_id"`
-	AddonName   string         `json:"addon_name"`
-	UnitPrice   pgtype.Numeric `json:"unit_price"`
-	Quantity    int32          `json:"quantity"`
-	Subtotal    pgtype.Numeric `json:"subtotal"`
+	ID           pgtype.UUID    `json:"id"`
+	TenantID     pgtype.UUID    `json:"tenant_id"`
+	OrderItemID  pgtype.UUID    `json:"order_item_id"`
+	AddonID      pgtype.UUID    `json:"addon_id"`
+	AddonName    string         `json:"addon_name"`
+	UnitPrice    pgtype.Numeric `json:"unit_price"`
+	Quantity     int32          `json:"quantity"`
+	Subtotal     pgtype.Numeric `json:"subtotal"`
+	RestaurantID pgtype.UUID    `json:"restaurant_id"`
 }
 
 type OutboxEvent struct {

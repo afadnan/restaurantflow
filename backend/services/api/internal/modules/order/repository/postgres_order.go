@@ -91,17 +91,19 @@ func (r *PostgresOrderRepository) Create(
 		order.UpdatedAt = orderRow.UpdatedAt.Time
 	}
 
-	// Persist all order items using the same domain-owned order ID.
+	// Persist all order items using the same tenant, restaurant,
+	// and domain-owned order ID as the parent aggregate.
 	for _, item := range order.Items {
 		_, err := q.CreateOrderItem(ctx, db.CreateOrderItemParams{
-			TenantID:   uuidToPgUUID(order.TenantID.UUID()),
-			OrderID:    uuidToPgUUID(order.ID.UUID()),
-			MenuItemID: uuidToPgUUID(item.ProductID.UUID()),
-			ItemName:   item.Name,
-			UnitPrice:  moneyToNumeric(item.UnitPrice),
-			Quantity:   item.Quantity.Value(),
-			Subtotal:   moneyToNumeric(item.Subtotal),
-			Notes:      textToPgText(item.Notes),
+			TenantID:     uuidToPgUUID(order.TenantID.UUID()),
+			RestaurantID: uuidToPgUUID(order.RestaurantID.UUID()),
+			OrderID:      uuidToPgUUID(order.ID.UUID()),
+			MenuItemID:   uuidToPgUUID(item.ProductID.UUID()),
+			ItemName:     item.Name,
+			UnitPrice:    moneyToNumeric(item.UnitPrice),
+			Quantity:     item.Quantity.Value(),
+			Subtotal:     moneyToNumeric(item.Subtotal),
+			Notes:        textToPgText(item.Notes),
 		})
 		if err != nil {
 			return fmt.Errorf(
@@ -298,7 +300,7 @@ func validateOrderTransition(
 
 func mapOrder(
 	row db.Order,
-	itemRows []db.OrderItem,
+	itemRows []db.ListOrderItemsRow,
 ) (*domain.Order, error) {
 	tenantUUID, err := pgUUIDToUUID(row.TenantID)
 	if err != nil {

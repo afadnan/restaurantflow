@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/afadnan/restaurantflow/services/api/internal/authorization"
 	"github.com/afadnan/restaurantflow/services/api/internal/config"
 	"github.com/afadnan/restaurantflow/services/api/internal/middleware"
 	menuhttp "github.com/afadnan/restaurantflow/services/api/internal/modules/menu/delivery/http"
@@ -370,10 +371,11 @@ func run() error {
 	// -------------------------------------------------------------------------
 	// HTTP handlers
 	// -------------------------------------------------------------------------
-
+	authorizer := authorization.NewAuthorizer()
 	orderHandler := httpdelivery.NewOrderHandler(
 		createOrderUseCase,
 		updateKDSStateUseCase,
+		authorizer,
 	)
 
 	restaurantHandler := httprestaurant.NewRestaurantHandler(
@@ -486,6 +488,7 @@ func run() error {
 
 	mux := http.NewServeMux()
 	authMiddleware := middleware.AuthMiddleware(tokenService)
+
 	// -------------------------------------------------------------------------
 	// Public Owner Registration routes
 	// -------------------------------------------------------------------------
@@ -505,6 +508,7 @@ func run() error {
 		orderHandler,
 		nil,
 		authMiddleware,
+		authorizer,
 	)
 
 	// Restaurant routes — JWT authentication required.
@@ -512,6 +516,7 @@ func run() error {
 		mux,
 		restaurantHandler,
 		authMiddleware,
+		authorizer,
 	)
 
 	// Menu Category routes — JWT authentication required.
@@ -519,6 +524,7 @@ func run() error {
 		mux,
 		menuCategoryHandler,
 		authMiddleware,
+		authorizer,
 	)
 
 	// Menu Item routes — JWT authentication required.
@@ -526,6 +532,7 @@ func run() error {
 		mux,
 		menuItemHandler,
 		authMiddleware,
+		authorizer,
 	)
 
 	// Menu Add-on routes — JWT authentication required.
@@ -533,6 +540,7 @@ func run() error {
 		mux,
 		menuAddonHandler,
 		authMiddleware,
+		authorizer,
 	)
 
 	// Menu Item–Add-on routes — JWT authentication required.
@@ -540,6 +548,7 @@ func run() error {
 		mux,
 		menuItemAddonHandler,
 		authMiddleware,
+		authorizer,
 	)
 
 	// -------------------------------------------------------------------------

@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
+	"github.com/afadnan/restaurantflow/services/api/internal/authorization"
 	menuhttp "github.com/afadnan/restaurantflow/services/api/internal/modules/menu/delivery/http"
 	"github.com/afadnan/restaurantflow/services/api/internal/modules/menu/domain"
 	"github.com/afadnan/restaurantflow/services/api/internal/modules/menu/repository"
@@ -52,11 +53,14 @@ func TestIntegrationMenuAddonHTTP(t *testing.T) {
 		fixture.tenantID,
 	)
 
+	authorizer := authorization.NewAuthorizer()
+
 	mux := http.NewServeMux()
 	menuhttp.RegisterAddonRoutes(
 		mux,
 		handler,
 		authMiddleware,
+		authorizer,
 	)
 
 	basePath := "/api/v1/restaurants/" +

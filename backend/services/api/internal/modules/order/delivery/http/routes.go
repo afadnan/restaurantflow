@@ -3,6 +3,7 @@ package httpdelivery
 import (
 	"net/http"
 
+	"github.com/afadnan/restaurantflow/services/api/internal/authorization"
 	"github.com/afadnan/restaurantflow/services/api/internal/middleware"
 )
 
@@ -11,13 +12,15 @@ func RegisterRoutes(
 	handler *OrderHandler,
 	websocketHandler *Handler,
 	authMiddleware func(http.Handler) http.Handler,
+	authorizer *authorization.Authorizer,
 ) {
 	mux.Handle(
 		"POST /api/v1/orders",
-		authMiddleware(
-			middleware.TenantMiddleware(
-				http.HandlerFunc(handler.CreateOrder),
-			),
+		middleware.Protected(
+			authMiddleware,
+			authorizer,
+			authorization.PermissionOrdersCreate,
+			http.HandlerFunc(handler.CreateOrder),
 		),
 	)
 
@@ -33,10 +36,11 @@ func RegisterRoutes(
 	if websocketHandler != nil {
 		mux.Handle(
 			"GET /ws/v1/kds",
-			authMiddleware(
-				middleware.TenantMiddleware(
-					http.HandlerFunc(websocketHandler.KDSWebSocket),
-				),
+			middleware.Protected(
+				authMiddleware,
+				authorizer,
+				authorization.PermissionKitchenOrdersRead,
+				http.HandlerFunc(websocketHandler.KDSWebSocket),
 			),
 		)
 	}

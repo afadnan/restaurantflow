@@ -14,6 +14,7 @@ import (
 const createOrderItem = `-- name: CreateOrderItem :one
 INSERT INTO order_items (
     tenant_id,
+    restaurant_id,
     order_id,
     menu_item_id,
     item_name,
@@ -30,11 +31,13 @@ VALUES (
     $5,
     $6,
     $7,
-    $8
+    $8,
+    $9
 )
 RETURNING
     id,
     tenant_id,
+    restaurant_id,
     order_id,
     menu_item_id,
     item_name,
@@ -46,19 +49,35 @@ RETURNING
 `
 
 type CreateOrderItemParams struct {
-	TenantID   pgtype.UUID    `json:"tenant_id"`
-	OrderID    pgtype.UUID    `json:"order_id"`
-	MenuItemID pgtype.UUID    `json:"menu_item_id"`
-	ItemName   string         `json:"item_name"`
-	UnitPrice  pgtype.Numeric `json:"unit_price"`
-	Quantity   int32          `json:"quantity"`
-	Subtotal   pgtype.Numeric `json:"subtotal"`
-	Notes      pgtype.Text    `json:"notes"`
+	TenantID     pgtype.UUID    `json:"tenant_id"`
+	RestaurantID pgtype.UUID    `json:"restaurant_id"`
+	OrderID      pgtype.UUID    `json:"order_id"`
+	MenuItemID   pgtype.UUID    `json:"menu_item_id"`
+	ItemName     string         `json:"item_name"`
+	UnitPrice    pgtype.Numeric `json:"unit_price"`
+	Quantity     int32          `json:"quantity"`
+	Subtotal     pgtype.Numeric `json:"subtotal"`
+	Notes        pgtype.Text    `json:"notes"`
 }
 
-func (q *Queries) CreateOrderItem(ctx context.Context, arg CreateOrderItemParams) (OrderItem, error) {
+type CreateOrderItemRow struct {
+	ID           pgtype.UUID        `json:"id"`
+	TenantID     pgtype.UUID        `json:"tenant_id"`
+	RestaurantID pgtype.UUID        `json:"restaurant_id"`
+	OrderID      pgtype.UUID        `json:"order_id"`
+	MenuItemID   pgtype.UUID        `json:"menu_item_id"`
+	ItemName     string             `json:"item_name"`
+	UnitPrice    pgtype.Numeric     `json:"unit_price"`
+	Quantity     int32              `json:"quantity"`
+	Subtotal     pgtype.Numeric     `json:"subtotal"`
+	Notes        pgtype.Text        `json:"notes"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) CreateOrderItem(ctx context.Context, arg CreateOrderItemParams) (CreateOrderItemRow, error) {
 	row := q.db.QueryRow(ctx, createOrderItem,
 		arg.TenantID,
+		arg.RestaurantID,
 		arg.OrderID,
 		arg.MenuItemID,
 		arg.ItemName,
@@ -67,10 +86,11 @@ func (q *Queries) CreateOrderItem(ctx context.Context, arg CreateOrderItemParams
 		arg.Subtotal,
 		arg.Notes,
 	)
-	var i OrderItem
+	var i CreateOrderItemRow
 	err := row.Scan(
 		&i.ID,
 		&i.TenantID,
+		&i.RestaurantID,
 		&i.OrderID,
 		&i.MenuItemID,
 		&i.ItemName,
@@ -87,6 +107,7 @@ const getOrderItemByID = `-- name: GetOrderItemByID :one
 SELECT
     id,
     tenant_id,
+    restaurant_id,
     order_id,
     menu_item_id,
     item_name,
@@ -105,12 +126,27 @@ type GetOrderItemByIDParams struct {
 	ID       pgtype.UUID `json:"id"`
 }
 
-func (q *Queries) GetOrderItemByID(ctx context.Context, arg GetOrderItemByIDParams) (OrderItem, error) {
+type GetOrderItemByIDRow struct {
+	ID           pgtype.UUID        `json:"id"`
+	TenantID     pgtype.UUID        `json:"tenant_id"`
+	RestaurantID pgtype.UUID        `json:"restaurant_id"`
+	OrderID      pgtype.UUID        `json:"order_id"`
+	MenuItemID   pgtype.UUID        `json:"menu_item_id"`
+	ItemName     string             `json:"item_name"`
+	UnitPrice    pgtype.Numeric     `json:"unit_price"`
+	Quantity     int32              `json:"quantity"`
+	Subtotal     pgtype.Numeric     `json:"subtotal"`
+	Notes        pgtype.Text        `json:"notes"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) GetOrderItemByID(ctx context.Context, arg GetOrderItemByIDParams) (GetOrderItemByIDRow, error) {
 	row := q.db.QueryRow(ctx, getOrderItemByID, arg.TenantID, arg.ID)
-	var i OrderItem
+	var i GetOrderItemByIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.TenantID,
+		&i.RestaurantID,
 		&i.OrderID,
 		&i.MenuItemID,
 		&i.ItemName,
@@ -127,6 +163,7 @@ const listOrderItems = `-- name: ListOrderItems :many
 SELECT
     id,
     tenant_id,
+    restaurant_id,
     order_id,
     menu_item_id,
     item_name,
@@ -146,18 +183,33 @@ type ListOrderItemsParams struct {
 	OrderID  pgtype.UUID `json:"order_id"`
 }
 
-func (q *Queries) ListOrderItems(ctx context.Context, arg ListOrderItemsParams) ([]OrderItem, error) {
+type ListOrderItemsRow struct {
+	ID           pgtype.UUID        `json:"id"`
+	TenantID     pgtype.UUID        `json:"tenant_id"`
+	RestaurantID pgtype.UUID        `json:"restaurant_id"`
+	OrderID      pgtype.UUID        `json:"order_id"`
+	MenuItemID   pgtype.UUID        `json:"menu_item_id"`
+	ItemName     string             `json:"item_name"`
+	UnitPrice    pgtype.Numeric     `json:"unit_price"`
+	Quantity     int32              `json:"quantity"`
+	Subtotal     pgtype.Numeric     `json:"subtotal"`
+	Notes        pgtype.Text        `json:"notes"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) ListOrderItems(ctx context.Context, arg ListOrderItemsParams) ([]ListOrderItemsRow, error) {
 	rows, err := q.db.Query(ctx, listOrderItems, arg.TenantID, arg.OrderID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []OrderItem
+	var items []ListOrderItemsRow
 	for rows.Next() {
-		var i OrderItem
+		var i ListOrderItemsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.TenantID,
+			&i.RestaurantID,
 			&i.OrderID,
 			&i.MenuItemID,
 			&i.ItemName,

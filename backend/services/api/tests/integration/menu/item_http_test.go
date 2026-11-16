@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
+	"github.com/afadnan/restaurantflow/services/api/internal/authorization"
 	menuhttp "github.com/afadnan/restaurantflow/services/api/internal/modules/menu/delivery/http"
 	"github.com/afadnan/restaurantflow/services/api/internal/modules/menu/domain"
 	"github.com/afadnan/restaurantflow/services/api/internal/modules/menu/repository"
@@ -68,8 +69,14 @@ func TestIntegrationMenuItemHTTP(t *testing.T) {
 	)
 
 	mux := http.NewServeMux()
-	menuhttp.RegisterItemRoutes(mux, handler, authMiddleware)
+	authorizer := authorization.NewAuthorizer()
 
+	menuhttp.RegisterItemRoutes(
+		mux,
+		handler,
+		authMiddleware,
+		authorizer,
+	)
 	basePath := fmt.Sprintf(
 		"/api/v1/restaurants/%s/menu/items",
 		fixture.restaurantID,
@@ -462,6 +469,4 @@ func TestIntegrationMenuItemHTTP(t *testing.T) {
 		require.Equal(t, "inactive", item.Status)
 		require.False(t, item.IsAvailable)
 	})
-
-	_ = authMiddleware
 }
