@@ -48,6 +48,13 @@ func newVariantIntegration(t *testing.T) *variantIntegration {
 	cfg, err := config.Load()
 	require.NoError(t, err)
 
+	require.Equal(
+		t,
+		"restaurantflow_test",
+		cfg.Database.Name,
+		"integration tests must never run against a non-test database",
+	)
+
 	pool, err := database.NewPostgresPool(ctx, cfg.Database)
 	require.NoError(t, err)
 

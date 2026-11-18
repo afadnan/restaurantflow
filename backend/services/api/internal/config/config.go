@@ -16,10 +16,12 @@ type Config struct {
 	AppEnv   string
 	HTTPPort int
 
-	Database DatabaseConfig
-	Redis    RedisConfig
-	Storage  StorageConfig
-	JWT      JWTConfig
+	Database       DatabaseConfig
+	OutboxDatabase DatabaseConfig
+	Redis          RedisConfig
+	Storage        StorageConfig
+	JWT            JWTConfig
+	WebSocket      WebSocketConfig
 }
 
 type DatabaseConfig struct {
@@ -49,6 +51,10 @@ type JWTConfig struct {
 	AccessTokenTTL time.Duration
 }
 
+type WebSocketConfig struct {
+	AllowedOrigins []string
+}
+
 func Load() (Config, error) {
 	if err := loadLocalEnv(); err != nil {
 		return Config{}, err
@@ -70,6 +76,11 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 
+	cfg.OutboxDatabase, err = loadOutboxDatabaseConfig(cfg.Database)
+	if err != nil {
+		return Config{}, err
+	}
+
 	cfg.Redis, err = loadRedisConfig()
 	if err != nil {
 		return Config{}, err
@@ -78,6 +89,11 @@ func Load() (Config, error) {
 	cfg.Storage = loadStorageConfig()
 
 	cfg.JWT, err = loadJWTConfig()
+	if err != nil {
+		return Config{}, err
+	}
+
+	cfg.WebSocket, err = loadWebSocketConfig()
 	if err != nil {
 		return Config{}, err
 	}
@@ -181,6 +197,35 @@ func loadDatabaseConfig() (DatabaseConfig, error) {
 	return cfg, nil
 }
 
+func loadOutboxDatabaseConfig(
+	appDatabase DatabaseConfig,
+) (DatabaseConfig, error) {
+	cfg := appDatabase
+
+	cfg.User = strings.TrimSpace(os.Getenv("OUTBOX_DATABASE_USER"))
+	cfg.Password = os.Getenv("OUTBOX_DATABASE_PASSWORD")
+
+	if cfg.User == "" {
+		return DatabaseConfig{}, errors.New(
+			"OUTBOX_DATABASE_USER is required",
+		)
+	}
+
+	if cfg.Password == "" {
+		return DatabaseConfig{}, errors.New(
+			"OUTBOX_DATABASE_PASSWORD is required",
+		)
+	}
+
+	if cfg.User == appDatabase.User {
+		return DatabaseConfig{}, errors.New(
+			"outbox database user must differ from application database user",
+		)
+	}
+
+	return cfg, nil
+}
+
 func loadRedisConfig() (RedisConfig, error) {
 	port, err := getRequiredInt("REDIS_PORT")
 	if err != nil {
@@ -247,6 +292,39 @@ func loadJWTConfig() (JWTConfig, error) {
 		Secret:         secret,
 		Issuer:         issuer,
 		AccessTokenTTL: ttl,
+	}, nil
+}
+
+func loadWebSocketConfig() (WebSocketConfig, error) {
+	raw := strings.TrimSpace(os.Getenv("WS_ALLOWED_ORIGINS"))
+	if raw == "" {
+		// An empty list preserves coder/websocket's same-origin default.
+		return WebSocketConfig{}, nil
+	}
+
+	parts := strings.Split(raw, ",")
+	origins := make([]string, 0, len(parts))
+
+	for _, part := range parts {
+		origin := strings.TrimSpace(part)
+
+		if origin == "" {
+			return WebSocketConfig{}, errors.New(
+				"WS_ALLOWED_ORIGINS contains an empty origin",
+			)
+		}
+
+		if origin == "*" {
+			return WebSocketConfig{}, errors.New(
+				"WS_ALLOWED_ORIGINS must not contain a wildcard origin",
+			)
+		}
+
+		origins = append(origins, origin)
+	}
+
+	return WebSocketConfig{
+		AllowedOrigins: origins,
 	}, nil
 }
 

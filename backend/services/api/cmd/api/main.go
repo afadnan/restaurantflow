@@ -72,6 +72,12 @@ func run() error {
 	}
 	defer pool.Close()
 
+	workerPool, err := database.NewPostgresPool(ctx, cfg.OutboxDatabase)
+	if err != nil {
+		return fmt.Errorf("initialize outbox postgres: %w", err)
+	}
+	defer workerPool.Close()
+
 	db := postgres.NewDB(pool)
 
 	log.Printf(
@@ -113,10 +119,32 @@ func run() error {
 	)
 
 	// -------------------------------------------------------------------------
+	// KDS realtime infrastructure
+	// -------------------------------------------------------------------------
+
+	redisSubscriber := redisplatform.NewSubscriber(
+		redisClient,
+		logger,
+	)
+
+	kdsHub := httpdelivery.NewHub(logger)
+
+	websocketHandler := httpdelivery.NewHandlerWithOrigins(
+		kdsHub,
+		cfg.WebSocket.AllowedOrigins,
+	)
+
+	realtimeBridge := httpdelivery.NewRealtimeBridge(
+		redisSubscriber,
+		kdsHub,
+		logger,
+	)
+
+	// -------------------------------------------------------------------------
 	// Outbox dispatcher
 	// -------------------------------------------------------------------------
 
-	outboxStore := postgresdb.New(pool)
+	outboxStore := postgresdb.New(workerPool)
 
 	dispatcher := events.NewDispatcher(
 		outboxStore,
@@ -129,17 +157,34 @@ func run() error {
 		},
 	)
 
-	var dispatcherWG sync.WaitGroup
+	var workerWG sync.WaitGroup
 
-	dispatcherWG.Add(1)
+	// Start the transactional outbox dispatcher.
+	workerWG.Add(1)
 
 	go func() {
-		defer dispatcherWG.Done()
+		defer workerWG.Done()
 
 		if err := dispatcher.Run(ctx); err != nil &&
 			!errors.Is(err, context.Canceled) {
 			logger.Error(
 				"outbox dispatcher stopped",
+				"error",
+				err,
+			)
+		}
+	}()
+
+	// Start the Redis-to-WebSocket realtime bridge.
+	workerWG.Add(1)
+
+	go func() {
+		defer workerWG.Done()
+
+		if err := realtimeBridge.Run(ctx); err != nil &&
+			!errors.Is(err, context.Canceled) {
+			logger.Error(
+				"KDS realtime bridge stopped",
 				"error",
 				err,
 			)
@@ -176,6 +221,7 @@ func run() error {
 	menuItemRepository := menurepository.NewPostgresItemRepository()
 	menuAddonRepository := menurepository.NewPostgresAddonRepository()
 	menuItemAddonRepository := menurepository.NewPostgresItemAddonRepository()
+
 	// -------------------------------------------------------------------------
 	// Menu Add-on use cases
 	// -------------------------------------------------------------------------
@@ -371,7 +417,9 @@ func run() error {
 	// -------------------------------------------------------------------------
 	// HTTP handlers
 	// -------------------------------------------------------------------------
+
 	authorizer := authorization.NewAuthorizer()
+
 	orderHandler := httpdelivery.NewOrderHandler(
 		createOrderUseCase,
 		updateKDSStateUseCase,
@@ -487,10 +535,20 @@ func run() error {
 	// -------------------------------------------------------------------------
 
 	mux := http.NewServeMux()
-	authMiddleware := middleware.AuthMiddleware(tokenService)
+
+	authenticatedUserValidator := middleware.NewPostgresAuthenticatedUserValidator(
+		db,
+		userRepository,
+	)
+
+	authMiddleware := func(next http.Handler) http.Handler {
+		return middleware.AuthMiddleware(tokenService)(
+			middleware.AuthenticatedUserMiddleware(authenticatedUserValidator)(next),
+		)
+	}
 
 	// -------------------------------------------------------------------------
-	// Public Owner Registration routes
+	// Public authentication routes
 	// -------------------------------------------------------------------------
 
 	// No TenantMiddleware: the tenant is created during registration.
@@ -502,16 +560,22 @@ func run() error {
 		logoutHandler,
 	)
 
-	// Order routes — JWT authentication required.
+	// -------------------------------------------------------------------------
+	// Order and KDS routes
+	// -------------------------------------------------------------------------
+
 	httpdelivery.RegisterRoutes(
 		mux,
 		orderHandler,
-		nil,
+		websocketHandler,
 		authMiddleware,
 		authorizer,
 	)
 
-	// Restaurant routes — JWT authentication required.
+	// -------------------------------------------------------------------------
+	// Restaurant routes
+	// -------------------------------------------------------------------------
+
 	httprestaurant.RegisterRoutes(
 		mux,
 		restaurantHandler,
@@ -519,7 +583,10 @@ func run() error {
 		authorizer,
 	)
 
-	// Menu Category routes — JWT authentication required.
+	// -------------------------------------------------------------------------
+	// Menu Category routes
+	// -------------------------------------------------------------------------
+
 	menuhttp.RegisterCategoryRoutes(
 		mux,
 		menuCategoryHandler,
@@ -527,7 +594,10 @@ func run() error {
 		authorizer,
 	)
 
-	// Menu Item routes — JWT authentication required.
+	// -------------------------------------------------------------------------
+	// Menu Item routes
+	// -------------------------------------------------------------------------
+
 	menuhttp.RegisterItemRoutes(
 		mux,
 		menuItemHandler,
@@ -535,7 +605,10 @@ func run() error {
 		authorizer,
 	)
 
-	// Menu Add-on routes — JWT authentication required.
+	// -------------------------------------------------------------------------
+	// Menu Add-on routes
+	// -------------------------------------------------------------------------
+
 	menuhttp.RegisterAddonRoutes(
 		mux,
 		menuAddonHandler,
@@ -543,7 +616,10 @@ func run() error {
 		authorizer,
 	)
 
-	// Menu Item–Add-on routes — JWT authentication required.
+	// -------------------------------------------------------------------------
+	// Menu Item–Add-on routes
+	// -------------------------------------------------------------------------
+
 	menuhttp.RegisterItemAddonRoutes(
 		mux,
 		menuItemAddonHandler,
@@ -630,15 +706,25 @@ func run() error {
 	case err := <-serverErr:
 		stop()
 
-		// The cancellation signal stops the dispatcher before its dependencies
-		// are closed.
-		dispatcherWG.Wait()
+		// Shutdown does not close hijacked WebSocket connections.
+		kdsHub.CloseAll()
+
+		// Wait for background workers before Redis and PostgreSQL close.
+		workerWG.Wait()
 
 		return fmt.Errorf("http server: %w", err)
 
 	case <-ctx.Done():
 		log.Println("shutdown signal received")
 	}
+
+	// -------------------------------------------------------------------------
+	// Close WebSocket connections
+	// -------------------------------------------------------------------------
+
+	// HTTP Server.Shutdown does not manage hijacked WebSocket connections.
+	// Close them explicitly so their reader and writer goroutines can exit.
+	kdsHub.CloseAll()
 
 	// -------------------------------------------------------------------------
 	// Graceful HTTP shutdown
@@ -650,15 +736,33 @@ func run() error {
 	)
 	defer cancel()
 
-	if err := server.Shutdown(shutdownCtx); err != nil {
-		return fmt.Errorf("shutdown http server: %w", err)
+	shutdownErr := server.Shutdown(shutdownCtx)
+
+	if shutdownErr != nil {
+		logger.Error(
+			"graceful HTTP shutdown failed; forcing close",
+			"error",
+			shutdownErr,
+		)
+
+		if err := server.Close(); err != nil {
+			logger.Error(
+				"forced HTTP server close failed",
+				"error",
+				err,
+			)
+		}
 	}
 
 	// -------------------------------------------------------------------------
-	// Graceful dispatcher shutdown
+	// Wait for background workers
 	// -------------------------------------------------------------------------
 
-	dispatcherWG.Wait()
+	workerWG.Wait()
+
+	if shutdownErr != nil {
+		return fmt.Errorf("shutdown http server: %w", shutdownErr)
+	}
 
 	log.Println("api server stopped")
 

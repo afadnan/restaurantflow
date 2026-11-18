@@ -123,3 +123,69 @@ func TestLoadJWTConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadOutboxDatabaseConfig(t *testing.T) {
+	appDatabase := DatabaseConfig{
+		Host:     "localhost",
+		Port:     5432,
+		Name:     "restaurantflow",
+		User:     "restaurantflow_app",
+		Password: "app-test-password",
+		SSLMode:  "disable",
+	}
+
+	t.Run("valid worker configuration", func(t *testing.T) {
+		t.Setenv("OUTBOX_DATABASE_USER", "restaurantflow_worker")
+		t.Setenv("OUTBOX_DATABASE_PASSWORD", "worker-test-password")
+
+		got, err := loadOutboxDatabaseConfig(appDatabase)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if got.User != "restaurantflow_worker" {
+			t.Errorf("user = %q, want restaurantflow_worker", got.User)
+		}
+
+		if got.Password != "worker-test-password" {
+			t.Error("worker password does not match configured password")
+		}
+
+		if got.Host != appDatabase.Host ||
+			got.Port != appDatabase.Port ||
+			got.Name != appDatabase.Name ||
+			got.SSLMode != appDatabase.SSLMode {
+			t.Error("worker connection settings should inherit application database settings")
+		}
+	})
+
+	t.Run("missing worker username", func(t *testing.T) {
+		t.Setenv("OUTBOX_DATABASE_USER", "")
+		t.Setenv("OUTBOX_DATABASE_PASSWORD", "worker-test-password")
+
+		_, err := loadOutboxDatabaseConfig(appDatabase)
+		if err == nil {
+			t.Fatal("expected error for missing worker username")
+		}
+	})
+
+	t.Run("missing worker password", func(t *testing.T) {
+		t.Setenv("OUTBOX_DATABASE_USER", "restaurantflow_worker")
+		t.Setenv("OUTBOX_DATABASE_PASSWORD", "")
+
+		_, err := loadOutboxDatabaseConfig(appDatabase)
+		if err == nil {
+			t.Fatal("expected error for missing worker password")
+		}
+	})
+
+	t.Run("reject application username", func(t *testing.T) {
+		t.Setenv("OUTBOX_DATABASE_USER", appDatabase.User)
+		t.Setenv("OUTBOX_DATABASE_PASSWORD", "worker-test-password")
+
+		_, err := loadOutboxDatabaseConfig(appDatabase)
+		if err == nil {
+			t.Fatal("expected error when worker and application usernames match")
+		}
+	})
+}

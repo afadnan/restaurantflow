@@ -38,6 +38,13 @@ func newIntegrationDB(t *testing.T) *integrationDB {
 	cfg, err := config.Load()
 	require.NoError(t, err)
 
+	require.Equal(
+		t,
+		"restaurantflow_test",
+		cfg.Database.Name,
+		"integration tests must never run against a non-test database",
+	)
+
 	pool, err := database.NewPostgresPool(ctx, cfg.Database)
 	require.NoError(t, err)
 
@@ -291,10 +298,6 @@ func TestCreateOrder_RollsBackOnEventFailure(t *testing.T) {
 	expectedErr := fmt.Errorf("forced outbox append failure")
 
 	uc := newCreateOrderUseCase(db)
-
-	// Replace the real event repository with one that fails
-	// after Orders.Create, KDS.Create, and inventory deduction
-	// have already succeeded inside the transaction.
 	uc.Events = failingEventRepository{
 		err: expectedErr,
 	}
@@ -306,37 +309,30 @@ func TestCreateOrder_RollsBackOnEventFailure(t *testing.T) {
 
 	require.ErrorIs(t, err, expectedErr)
 
-	// The order was inserted before the forced event failure.
-	// It must have been rolled back.
 	require.Equal(
 		t,
 		0,
 		countForTenant(t, db, fixture.TenantID, "orders"),
 	)
 
-	// The order item was inserted in the same transaction.
 	require.Equal(
 		t,
 		0,
 		countForTenant(t, db, fixture.TenantID, "order_items"),
 	)
 
-	// The KDS ticket was inserted in the same transaction.
 	require.Equal(
 		t,
 		0,
 		countForTenant(t, db, fixture.TenantID, "kds_tickets"),
 	)
 
-	// The outbox event must not exist because Append failed.
 	require.Equal(
 		t,
 		0,
 		countForTenant(t, db, fixture.TenantID, "outbox_events"),
 	)
 
-	// Inventory deduction happened before the forced event failure,
-	// so it must also have been rolled back.
 	require.Equal(
 		t,
 		"2.000",
@@ -441,7 +437,6 @@ func readPersistedOrderIDs(
 
 	var result persistedOrderIDs
 
-	// The order aggregate's identity.
 	err = tx.QueryRow(
 		ctx,
 		`
@@ -455,8 +450,6 @@ func readPersistedOrderIDs(
 	).Scan(&result.OrderID)
 	require.NoError(t, err)
 
-	// order_items.id is a separate row identity.
-	// The relationship to the order is order_items.order_id.
 	err = tx.QueryRow(
 		ctx,
 		`
@@ -470,8 +463,6 @@ func readPersistedOrderIDs(
 	).Scan(&result.OrderItemOrderID)
 	require.NoError(t, err)
 
-	// kds_tickets.id is a separate ticket identity.
-	// The relationship to the order is kds_tickets.order_id.
 	err = tx.QueryRow(
 		ctx,
 		`
@@ -485,8 +476,6 @@ func readPersistedOrderIDs(
 	).Scan(&result.KDSTicketOrderID)
 	require.NoError(t, err)
 
-	// outbox_events.id is the event-row identity.
-	// aggregate_id identifies the order aggregate.
 	err = tx.QueryRow(
 		ctx,
 		`
@@ -598,34 +587,11 @@ func TestCreateOrder_AtomicSuccess(t *testing.T) {
 		fixture.TenantID,
 	)
 
-	// All related records must point to the same order aggregate.
-	require.Equal(
-		t,
-		ids.OrderID,
-		ids.OrderItemOrderID,
-	)
+	require.Equal(t, ids.OrderID, ids.OrderItemOrderID)
+	require.Equal(t, ids.OrderID, ids.KDSTicketOrderID)
+	require.Equal(t, ids.OrderID, ids.AggregateID)
+	require.Equal(t, order.ID.UUID(), ids.OrderID)
 
-	require.Equal(
-		t,
-		ids.OrderID,
-		ids.KDSTicketOrderID,
-	)
-
-	require.Equal(
-		t,
-		ids.OrderID,
-		ids.AggregateID,
-	)
-
-	// The returned domain order must have the same ID
-	// that was persisted in orders.id.
-	require.Equal(
-		t,
-		order.ID.UUID(),
-		ids.OrderID,
-	)
-
-	// 2 × 0.500 = 1.000 deducted from 2.000.
 	require.Equal(
 		t,
 		"1.000",
@@ -651,14 +617,7 @@ func TestCreateOrder_RollsBackOnInventoryFailure(t *testing.T) {
 	)
 
 	require.Error(t, err)
-
-	// 3 × 0.500 = 1.500 required,
-	// but only 1.000 exists.
-	require.Contains(
-		t,
-		err.Error(),
-		"insufficient inventory",
-	)
+	require.Contains(t, err.Error(), "insufficient inventory")
 
 	require.Equal(
 		t,
@@ -684,7 +643,6 @@ func TestCreateOrder_RollsBackOnInventoryFailure(t *testing.T) {
 		countForTenant(t, db, fixture.TenantID, "outbox_events"),
 	)
 
-	// The failed transaction must not partially deduct inventory.
 	require.Equal(
 		t,
 		"1.000",
@@ -729,63 +687,32 @@ func TestCreateOrder_TenantIsolation(t *testing.T) {
 		orderB.ID.UUID(),
 	)
 
-	// Tenant A sees only its own order-related records.
-	require.Equal(
-		t,
-		1,
-		countForTenant(t, db, fixtureA.TenantID, "orders"),
-	)
+	for _, table := range []string{
+		"orders",
+		"order_items",
+		"kds_tickets",
+		"outbox_events",
+	} {
+		require.Equal(
+			t,
+			1,
+			countForTenant(t, db, fixtureA.TenantID, table),
+			"tenant A should see only its own %s",
+			table,
+		)
 
-	require.Equal(
-		t,
-		1,
-		countForTenant(t, db, fixtureA.TenantID, "order_items"),
-	)
+		require.Equal(
+			t,
+			1,
+			countForTenant(t, db, fixtureB.TenantID, table),
+			"tenant B should see only its own %s",
+			table,
+		)
+	}
 
-	require.Equal(
-		t,
-		1,
-		countForTenant(t, db, fixtureA.TenantID, "kds_tickets"),
-	)
-
-	require.Equal(
-		t,
-		1,
-		countForTenant(t, db, fixtureA.TenantID, "outbox_events"),
-	)
-
-	// Tenant B sees only its own order-related records.
-	require.Equal(
-		t,
-		1,
-		countForTenant(t, db, fixtureB.TenantID, "orders"),
-	)
-
-	require.Equal(
-		t,
-		1,
-		countForTenant(t, db, fixtureB.TenantID, "order_items"),
-	)
-
-	require.Equal(
-		t,
-		1,
-		countForTenant(t, db, fixtureB.TenantID, "kds_tickets"),
-	)
-
-	require.Equal(
-		t,
-		1,
-		countForTenant(t, db, fixtureB.TenantID, "outbox_events"),
-	)
-
-	ctx, cancel := context.WithTimeout(
-		context.Background(),
-		5*time.Second,
-	)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Verify tenant A cannot see tenant B's order.
 	tx, err := db.pool.Begin(ctx)
 	require.NoError(t, err)
 
@@ -809,12 +736,9 @@ func TestCreateOrder_TenantIsolation(t *testing.T) {
 		orderB.ID.UUID(),
 	).Scan(&visibleToA)
 	require.NoError(t, err)
-
 	require.Equal(t, 1, visibleToA)
-
 	require.NoError(t, tx.Rollback(ctx))
 
-	// Verify tenant B cannot see tenant A's order.
 	tx, err = db.pool.Begin(ctx)
 	require.NoError(t, err)
 
@@ -838,19 +762,14 @@ func TestCreateOrder_TenantIsolation(t *testing.T) {
 		orderB.ID.UUID(),
 	).Scan(&visibleToB)
 	require.NoError(t, err)
-
 	require.Equal(t, 1, visibleToB)
-
 	require.NoError(t, tx.Rollback(ctx))
 }
 
 func TestIntegrationDBRequiresTenantContextForRLS(t *testing.T) {
 	db := newIntegrationDB(t)
 
-	ctx, cancel := context.WithTimeout(
-		context.Background(),
-		5*time.Second,
-	)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	var count int
@@ -861,8 +780,5 @@ func TestIntegrationDBRequiresTenantContextForRLS(t *testing.T) {
 	).Scan(&count)
 
 	require.NoError(t, err)
-
-	// With no app.tenant_id set, tenant-scoped RLS
-	// must expose zero rows.
 	require.Equal(t, 0, count)
 }

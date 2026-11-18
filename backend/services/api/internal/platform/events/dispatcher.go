@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	menudomain "github.com/afadnan/restaurantflow/services/api/internal/modules/menu/domain"
 	orderdomain "github.com/afadnan/restaurantflow/services/api/internal/modules/order/domain"
 	db "github.com/afadnan/restaurantflow/services/api/internal/platform/postgres/db"
 	redisplatform "github.com/afadnan/restaurantflow/services/api/internal/platform/redis"
@@ -132,7 +133,6 @@ func (d *Dispatcher) Run(ctx context.Context) error {
 				"outbox dispatcher stopping",
 				"reason", ctx.Err(),
 			)
-
 			return ctx.Err()
 
 		case <-ticker.C:
@@ -154,7 +154,6 @@ func (d *Dispatcher) Run(ctx context.Context) error {
 
 func (d *Dispatcher) dispatchBatch(ctx context.Context) error {
 	startedAt := time.Now()
-
 	claimToken := uuid.New()
 
 	rows, err := d.store.ClaimOutboxEvents(
@@ -197,7 +196,6 @@ func (d *Dispatcher) dispatchBatch(ctx context.Context) error {
 				"tenant_id", row.TenantID,
 				"error", err,
 			)
-
 			continue
 		}
 
@@ -226,12 +224,7 @@ func (d *Dispatcher) dispatchEvent(
 		row.Payload,
 	)
 	if err != nil {
-		if markErr := d.markFailed(
-			ctx,
-			row.ID,
-			claimToken,
-			err,
-		); markErr != nil {
+		if markErr := d.markFailed(ctx, row.ID, claimToken, err); markErr != nil {
 			d.logger.ErrorContext(
 				ctx,
 				"failed to record outbox event failure",
@@ -252,12 +245,7 @@ func (d *Dispatcher) dispatchEvent(
 	}
 
 	if err := d.publisher.Publish(ctx, event); err != nil {
-		if markErr := d.markFailed(
-			ctx,
-			row.ID,
-			claimToken,
-			err,
-		); markErr != nil {
+		if markErr := d.markFailed(ctx, row.ID, claimToken, err); markErr != nil {
 			d.logger.ErrorContext(
 				ctx,
 				"failed to record outbox event failure",
@@ -323,47 +311,64 @@ func decodeEvent(
 ) (sharedevents.DomainEvent, error) {
 	switch eventType {
 	case orderdomain.EventOrderCreated:
-		var event orderdomain.OrderCreatedEvent
-
-		if err := json.Unmarshal(payload, &event); err != nil {
-			return nil, fmt.Errorf(
-				"decode order.created payload: %w",
-				err,
-			)
-		}
-
-		if event.EventID() == uuid.Nil {
-			return nil, errors.New(
-				"order.created event id is nil",
-			)
-		}
-
-		return event, nil
+		return decodeTypedEvent[orderdomain.OrderCreatedEvent](payload, eventType)
 
 	case orderdomain.EventKDSStateUpdated:
-		var event orderdomain.KDSStateUpdatedEvent
+		return decodeTypedEvent[orderdomain.KDSStateUpdatedEvent](payload, eventType)
 
-		if err := json.Unmarshal(payload, &event); err != nil {
-			return nil, fmt.Errorf(
-				"decode kds.state.updated payload: %w",
-				err,
-			)
-		}
+	case menudomain.EventTypeCategoryCreated,
+		menudomain.EventTypeCategoryUpdated,
+		menudomain.EventTypeCategoryDeactivated:
+		return decodeTypedEvent[menudomain.CategoryEvent](payload, eventType)
 
-		if event.EventID() == uuid.Nil {
-			return nil, errors.New(
-				"kds.state.updated event id is nil",
-			)
-		}
+	case menudomain.EventTypeItemCreated,
+		menudomain.EventTypeItemUpdated,
+		menudomain.EventTypeItemDeactivated:
+		return decodeTypedEvent[menudomain.ItemEvent](payload, eventType)
 
-		return event, nil
+	case menudomain.EventTypeVariantCreated,
+		menudomain.EventTypeVariantUpdated,
+		menudomain.EventTypeVariantDeactivated:
+		return decodeTypedEvent[menudomain.VariantEvent](payload, eventType)
+
+	case menudomain.EventTypeAddonCreated,
+		menudomain.EventTypeAddonUpdated,
+		menudomain.EventTypeAddonDeactivated:
+		return decodeTypedEvent[menudomain.AddonEvent](payload, eventType)
+
+	case menudomain.EventTypeItemAddonAttached,
+		menudomain.EventTypeItemAddonUpdated,
+		menudomain.EventTypeItemAddonDetached:
+		return decodeTypedEvent[menudomain.ItemAddonEvent](payload, eventType)
 
 	default:
-		return nil, fmt.Errorf(
-			"unsupported outbox event type: %q",
+		return nil, fmt.Errorf("unsupported outbox event type: %q", eventType)
+	}
+}
+
+func decodeTypedEvent[T sharedevents.DomainEvent](
+	payload []byte,
+	eventType sharedevents.EventType,
+) (T, error) {
+	var event T
+
+	if err := json.Unmarshal(payload, &event); err != nil {
+		return event, fmt.Errorf("decode %s payload: %w", eventType, err)
+	}
+
+	if event.EventID() == uuid.Nil {
+		return event, fmt.Errorf("%s event id is nil", eventType)
+	}
+
+	if event.EventType() != eventType {
+		return event, fmt.Errorf(
+			"event type mismatch: outbox=%q payload=%q",
 			eventType,
+			event.EventType(),
 		)
 	}
+
+	return event, nil
 }
 
 // Compile-time verification that the current Redis publisher implements

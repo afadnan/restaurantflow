@@ -32,6 +32,10 @@ func newDispatcherIntegrationDB(t *testing.T) *dispatcherIntegrationDB {
 		)
 	}
 
+	// Load the repository .env before reading test-specific variables.
+	cfg, err := config.Load()
+	require.NoError(t, err)
+
 	workerUser := os.Getenv("OUTBOX_TEST_DATABASE_USER")
 	workerPassword := os.Getenv("OUTBOX_TEST_DATABASE_PASSWORD")
 
@@ -50,15 +54,6 @@ func newDispatcherIntegrationDB(t *testing.T) *dispatcherIntegrationDB {
 		)
 	}
 
-	ctx, cancel := context.WithTimeout(
-		context.Background(),
-		10*time.Second,
-	)
-	defer cancel()
-
-	cfg, err := config.Load()
-	require.NoError(t, err)
-
 	outboxTestDatabaseName := os.Getenv("OUTBOX_TEST_DATABASE_NAME")
 
 	require.NotEmpty(
@@ -76,6 +71,12 @@ func newDispatcherIntegrationDB(t *testing.T) *dispatcherIntegrationDB {
 
 	cfg.Database.Name = outboxTestDatabaseName
 
+	ctx, cancel := context.WithTimeout(
+		context.Background(),
+		10*time.Second,
+	)
+	defer cancel()
+
 	// Application runtime connection.
 	appPool, err := database.NewPostgresPool(ctx, cfg.Database)
 	require.NoError(t, err)
@@ -89,10 +90,7 @@ func newDispatcherIntegrationDB(t *testing.T) *dispatcherIntegrationDB {
 	require.NoError(t, err)
 
 	// Dedicated integration-test cleanup connection.
-	//
 	// This connection is intentionally separate from both runtime roles.
-	// It exists only so tests can perform destructive database cleanup
-	// such as TRUNCATE.
 	cleanupCfg := cfg.Database
 	cleanupCfg.User = cleanupUser
 	cleanupCfg.Password = cleanupPassword
